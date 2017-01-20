@@ -53,7 +53,7 @@ class Smtp
     /**
      * @var array $boundary The list of boundaries
      */
-    protected $boundary = array();
+    protected $boundary = [];
        
     /**
      * @var array $subject The mail subject
@@ -63,27 +63,27 @@ class Smtp
     /**
      * @var array $body Body content types
      */
-    protected $body = array();
+    protected $body = [];
        
     /**
      * @var array $to The list of main recipients
      */
-    protected $to = array();
+    protected $to = [];
        
     /**
      * @var array $cc The list of carbon copies
      */
-    protected $cc = array();
+    protected $cc = [];
        
     /**
      * @var array $bcc The list of BCCs sorry i forgot what this stood for :(
      */
-    protected $bcc = array();
+    protected $bcc = [];
        
     /**
      * @var array $attachments The list of attachments
      */
-    protected $attachments = array();
+    protected $attachments = [];
 
     /**
      * @var bool $debugging If true outputs the logs
