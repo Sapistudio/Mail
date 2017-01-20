@@ -8,7 +8,7 @@ namespace SapiStudio\SapiMail;
  * distributed with this package.
  */
 
-class Exception extends \Eden\Core\Exception
+class Exception extends \Exception
 {
     /**
      * @const string SERVER_ERROR Error template
