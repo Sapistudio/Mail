@@ -1,5 +1,5 @@
 <?php
-namespace SapiStudio\Mail;
+namespace SapiStudio\SapiMail;
 /**
  * This file is part of a fork of  the Eden PHP Library.
  * (c) 2014-2016 Openovate Labs
@@ -7,7 +7,6 @@ namespace SapiStudio\Mail;
  * Copyright and license information can be found at LICENSE.txt
  * distributed with this package.
  */
-
 
 class Imap
 {
