@@ -88,7 +88,7 @@ class Smtp
     /**
      * @var bool $debugging If true outputs the logs
      */
-    private $debugging = false;
+    private $debugging = true;
 
     /**
      * Smtp::__construct()
@@ -108,8 +108,8 @@ class Smtp
         $this->username     = $user;
         $this->password     = $pass;
         $this->port         = $port;
-        $this->ssl          = $ssl;
-        $this->tls          = $tls;
+        $this->ssl          = true;
+        $this->tls          = $ssl;
         $this->boundary[]   = md5(time().'1');
         $this->boundary[]   = md5(time().'2');
     }
