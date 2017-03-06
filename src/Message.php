@@ -1,339 +1,305 @@
 <?php
+
 namespace SapiStudio\SapiMail;
-use Illuminate\Support\Arr;
-use Carbon\Carbon;
+
+use Swift_Image;
+use Swift_Attachment;
 
 class Message
 {
-    const NO_SUBJECT = '(no subject)';
-    private $messageFolder;
-    private $messageUid;
-    private $messageFlags;
-    private $messageContentType;
-    private $messageSize;
-    private $messageStatus;
-    private $messageSubject;
-    private $messageId;
-    private $messageDate;
-    private $messageFrom;
-    private $messageReplyTo;
-    private $messageTo;
-    private $messageCc;
-    private $messageBcc;
-    private $messagePlain;
-    private $messageHtml;
-    private $messageAttachments;
-    private $messageheaders;
-    private $rawMessageContent;
-    private $parser;
+    protected $swift;
 
     /**
-     * Message::make()
+     * Message::__construct()
      * 
-     * @param mixed $rawContent
+     * @param mixed $swift
      * @return
      */
-    public static function make($rawContent)
+    public function __construct($swift)
     {
-        $self         = new self;
-        $self->parser = EmailParser::make((is_array($rawContent)) ? implode("\n", $rawContent) : $rawContent);
-        return $self;
-    }
-    
-    /**
-     * Message::load()
-     * 
-     * @param mixed $format
-     * @return
-     */
-    public function load($format=null){
-        $mail = $this->parser->getMessage($format);
-        if(!$mail)
-            return false;
-        $this->rawMessageContent = $mail['rawContent'];
-        $this->messageheaders    = $mail['headers'];
-        return $this->SetHtml($mail['html'])->SetPlain($mail['text'])->prepare();
-    }
-    
-    /**
-     * Message::prepare()
-     * 
-     * @return
-     */
-    protected function prepare()
-    {
-        $this->messageFrom      = ($this->headerExists('From')) ? \mailparse_rfc822_parse_addresses($this->headerGet('From'))[0] : null;
-        $this->messageReplyTo   = ($this->headerExists('Reply-to')) ? \mailparse_rfc822_parse_addresses($this->headerGet('Reply-to'))[0] : null;
-        $this->messageTo        = ($this->headerExists('To')) ? \mailparse_rfc822_parse_addresses($this->headerGet('To')) : null;
-        $this->messageCc        = ($this->headerExists('Cc')) ? \mailparse_rfc822_parse_addresses($this->headerGet('Cc')) : null;
-        $this->messageBcc       = ($this->headerExists('Bcc')) ? \mailparse_rfc822_parse_addresses($this->headerGet('Bcc')) : null;
-        $this->messageSubject   = $this->headerGet('Subject', self::NO_SUBJECT);
-        $this->messageId        = $this->headerGet('Message-ID');
-        return $this;
-    }
-    
-    /**
-     * Message::setFlags()
-     * 
-     * @param mixed $flags
-     * @return
-     */
-    public function setFlags($flags){
-        $this->messageFlags  = array_map("strtolower",array_filter(explode(" ",$flags)));
-        $this->messageStatus = (in_array('\\seen', $this->messageFlags)) ? 'read' : 'unread';
-        return $this;    
-    }
-    
-    /**
-     * Message::GetBody()
-     * 
-     * @return
-     */
-    public function GetBody(){
-        return ($this->Html() != '') ? $this->Html() : str_replace("\n",'',$this->Plain());
-    }
-    
-    /**
-     * Message::headerExists()
-     * 
-     * @param mixed $key
-     * @return
-     */
-    public function headerExists($key)
-    {
-        return Arr::has($this->messageheaders, strtolower($key));
+        $this->swift = $swift;
     }
 
     /**
-     * Message::setOptions()
+     * Message::from()
      * 
-     * @param mixed $key
-     * @param mixed $value
+     * @param mixed $address
+     * @param mixed $name
      * @return
      */
-    public function setOptions($key, $value = null)
+    public function from($address, $name = null)
     {
-        $keys = is_array($key) ? $key : [$key => $value];
-        foreach ($keys as $key => $value)
-            $this->$key = $value;
+        $this->swift->setFrom($address, $name);
+
         return $this;
     }
 
     /**
-     * Message::headerGet()
+     * Message::sender()
      * 
-     * @param mixed $key
-     * @param mixed $default
+     * @param mixed $address
+     * @param mixed $name
      * @return
      */
-    public function headerGet($key, $default = null)
+    public function sender($address, $name = null)
     {
-        return Arr::get($this->messageheaders, strtolower($key), $default);
-    }
+        $this->swift->setSender($address, $name);
 
-    /**
-     * Message::Plain()
-     * 
-     * @return
-     */
-    public function Plain()
-    {
-        return $this->messagePlain;
-    }
-
-    /**
-     * Message::rawMessage()
-     * 
-     * @return
-     */
-    public function rawMessage()
-    {
-        return $this->rawMessageContent;
-    }
-    
-    /**
-     * Message::Html()
-     * 
-     * @return
-     */
-    public function Html()
-    {
-        return $this->messageHtml;
-    }
-
-    /**
-     * Message::SetHtml()
-     * 
-     * @param mixed $sHtml
-     * @return
-     */
-    public function SetHtml($sHtml)
-    {
-        $this->messageHtml = $sHtml;
         return $this;
     }
 
     /**
-     * Message::SetPlain()
+     * Message::returnPath()
      * 
-     * @param mixed $plain
+     * @param mixed $address
      * @return
      */
-    public function SetPlain($plain)
+    public function returnPath($address)
     {
-        $this->messagePlain = $plain;
+        $this->swift->setReturnPath($address);
+
         return $this;
     }
-    
+
     /**
-     * Message::Status()
+     * Message::to()
      * 
+     * @param mixed $address
+     * @param bool $override
      * @return
      */
-    public function Status()
+    public function to($address,$override = true)
     {
-        return $this->messageStatus;
+        if ($override) {
+            $this->swift->setTo($address, $name);
+
+            return $this;
+        }
+
+        return $this->addAddresses($address, 'To');
+    }
+
+    /**
+     * Message::cc()
+     * 
+     * @param mixed $address
+     * @param mixed $name
+     * @return
+     */
+    public function cc($address, $name = null)
+    {
+        return $this->addAddresses($address, $name, 'Cc');
+    }
+
+    /**
+     * Message::bcc()
+     * 
+     * @param mixed $address
+     * @param mixed $name
+     * @return
+     */
+    public function bcc($address, $name = null)
+    {
+        return $this->addAddresses($address, $name, 'Bcc');
+    }
+
+    /**
+     * Message::replyTo()
+     * 
+     * @param mixed $address
+     * @param mixed $name
+     * @return
+     */
+    public function replyTo($address, $name = null)
+    {
+        return $this->addAddresses($address, $name, 'ReplyTo');
+    }
+
+    /**
+     * Message::addAddresses()
+     * 
+     * @param mixed $address
+     * @param mixed $name
+     * @param mixed $type
+     * @return
+     */
+    protected function addAddresses($address, $name, $type)
+    {
+        if (is_array($address)) {
+            $this->swift->{"set{$type}"}($address, $name);
+        } else {
+            $this->swift->{"add{$type}"}($address, $name);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Message::subject()
+     * 
+     * @param mixed $subject
+     * @return
+     */
+    public function subject($subject)
+    {
+        $this->swift->setSubject($subject);
+
+        return $this;
+    }
+
+    /**
+     * Message::priority()
+     * 
+     * @param mixed $level
+     * @return
+     */
+    public function priority($level)
+    {
+        $this->swift->setPriority($level);
+
+        return $this;
+    }
+
+    /**
+     * Message::attach()
+     * 
+     * @param mixed $file
+     * @param mixed $options
+     * @return
+     */
+    public function attach($file, array $options = [])
+    {
+        $attachment = $this->createAttachmentFromPath($file);
+
+        return $this->prepAttachment($attachment, $options);
     }
     
     /**
-     * Message::Folder()
+     * Message::removeHeader()
      * 
+     * @param mixed $headerName
      * @return
      */
-    public function Folder()
+    public function removeHeader($headerName)
     {
-        return $this->messageFolder;
+        $this->swift->getHeaders()->removeAll($headerName);
+        
+        return $this;
     }
 
     /**
-     * Message::Uid()
+     * Message::createAttachmentFromPath()
      * 
+     * @param mixed $file
      * @return
      */
-    public function Uid()
+    protected function createAttachmentFromPath($file)
     {
-        return $this->messageUid;
+        return Swift_Attachment::fromPath($file);
     }
 
     /**
-     * Message::MessageId()
+     * Message::attachData()
      * 
+     * @param mixed $data
+     * @param mixed $name
+     * @param mixed $options
      * @return
      */
-    public function MessageId()
+    public function attachData($data, $name, array $options = [])
     {
-        return $this->sMessageId;
+        $attachment = $this->createAttachmentFromData($data, $name);
+
+        return $this->prepAttachment($attachment, $options);
     }
 
     /**
-     * Message::Subject()
+     * Message::createAttachmentFromData()
      * 
+     * @param mixed $data
+     * @param mixed $name
      * @return
      */
-    public function Subject()
+    protected function createAttachmentFromData($data, $name)
     {
-        return $this->messageSubject;
+        return Swift_Attachment::newInstance($data, $name);
     }
 
     /**
-     * Message::ContentType()
+     * Message::embed()
      * 
+     * @param mixed $file
      * @return
      */
-    public function ContentType()
+    public function embed($file)
     {
-        return $this->messageContentType;
+        return $this->swift->embed(Swift_Image::fromPath($file));
     }
 
     /**
-     * Message::Size()
+     * Message::embedData()
      * 
+     * @param mixed $data
+     * @param mixed $name
+     * @param mixed $contentType
      * @return
      */
-    public function Size()
+    public function embedData($data, $name, $contentType = null)
     {
-        return $this->messageSize;
+        $image = Swift_Image::newInstance($data, $name, $contentType);
+
+        return $this->swift->embed($image);
     }
 
     /**
-     * Message::Date()
+     * Message::prepAttachment()
      * 
+     * @param mixed $attachment
+     * @param mixed $options
      * @return
      */
-    public function Date()
+    protected function prepAttachment($attachment, $options = [])
     {
-        return $this->messageDate;
+        // First we will check for a MIME type on the message, which instructs the
+        // mail client on what type of attachment the file is so that it may be
+        // downloaded correctly by the user. The MIME option is not required.
+        if (isset($options['mime'])) {
+            $attachment->setContentType($options['mime']);
+        }
+
+        // If an alternative name was given as an option, we will set that on this
+        // attachment so that it will be downloaded with the desired names from
+        // the developer, otherwise the default file names will get assigned.
+        if (isset($options['as'])) {
+            $attachment->setFilename($options['as']);
+        }
+
+        $this->swift->attach($attachment);
+
+        return $this;
     }
 
     /**
-     * Message::Flags()
+     * Message::getSwiftMessage()
      * 
      * @return
      */
-    public function Flags()
+    public function getSwiftMessage()
     {
-        return $this->messageFlags;
-    }
-
-
-    /**
-     * Message::From()
-     * 
-     * @return
-     */
-    public function From()
-    {
-        return $this->messageFrom;
+        return $this->swift;
     }
 
     /**
-     * Message::ReplyTo()
+     * Message::__call()
      * 
+     * @param mixed $method
+     * @param mixed $parameters
      * @return
      */
-    public function ReplyTo()
+    public function __call($method, $parameters)
     {
-        return $this->messageReplyTo;
-    }
+        $callable = [$this->swift, $method];
 
-
-    /**
-     * Message::To()
-     * 
-     * @return
-     */
-    public function To()
-    {
-        return $this->messageTo;
-    }
-
-    /**
-     * Message::Cc()
-     * 
-     * @return
-     */
-    public function Cc()
-    {
-        return $this->messageCc;
-    }
-
-    /**
-     * Message::Bcc()
-     * 
-     * @return
-     */
-    public function Bcc()
-    {
-        return $this->messageBcc;
-    }
-
-    /**
-     * Message::Attachments()
-     * 
-     * @return
-     */
-    public function Attachments()
-    {
-        return $this->messageAttachments;
+        return call_user_func_array($callable, $parameters);
     }
 }
