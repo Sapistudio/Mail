@@ -1,7 +1,6 @@
 {
     "name": "sapistudio/sapimail",
     "type": "library",
-    "description": "fork after Eden IMAP and SMTP component",
     "license": "MIT",
     "require": {
         "php": ">=5.6",
