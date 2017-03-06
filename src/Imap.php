@@ -341,7 +341,7 @@ class Imap
                 $iUids = filter_var($searchUids[1], FILTER_SANITIZE_NUMBER_INT);
                 $uids[] = $iUids;
                 if($emailRaw)
-                    $emails[$iUids] = Message::make($emailRaw)->setFlags($searchFlags[1])->setOptions(['messageFolder' => $this->mailbox, 'messageUid' => $iUids, 'messageSize' => filter_var($searchSize[1],FILTER_SANITIZE_NUMBER_INT)])->load();
+                    $emails[$iUids] = ImapMessage::make($emailRaw)->setFlags($searchFlags[1])->setOptions(['messageFolder' => $this->mailbox, 'messageUid' => $iUids, 'messageSize' => filter_var($searchSize[1],FILTER_SANITIZE_NUMBER_INT)])->load();
             }
         }
         print_R($uids);
