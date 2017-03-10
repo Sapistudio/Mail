@@ -9,19 +9,36 @@ class EmailParser extends PhpMimeMailParser
     public $contentPartsData = null;
     protected $defaultMimeTypes = ['text' => 'text/plain', 'html' => 'text/html'];
     protected $defaultPart      = 1;
-    protected $messageflags     = [];
-    protected $messageUid       = null;
     
+    /**
+     * EmailParser::make()
+     * 
+     * @param mixed $raw
+     * @return
+     */
     public static function make($raw){
         return (new self())->loadMailText($raw);
     }
     
+    /**
+     * EmailParser::__construct()
+     * 
+     * @param mixed $messageId
+     * @param mixed $flags
+     * @return
+     */
     public function __construct($messageId=null,$flags=null)
     {
         parent::__construct();
         $this->contentPartsData = (new Collection());
     }
     
+    /**
+     * EmailParser::loadMailText()
+     * 
+     * @param mixed $data
+     * @return
+     */
     public function loadMailText($data)
     {
         $this->setText($data);
@@ -32,7 +49,7 @@ class EmailParser extends PhpMimeMailParser
             $total = count(explode('.', $part_id));
             if (in_array($contentType, $this->defaultMimeTypes))
             {
-                if(count($this->parts)==1){
+                if(count($this->parts)==1 || $part_id==$this->defaultPart){
                     $keyIndex = $total;
                     $parts[$keyIndex]['type']       = $contentType;
                     $parts[$keyIndex]['headers']    = $this->getContentHeaders($contentPart);
@@ -60,12 +77,24 @@ class EmailParser extends PhpMimeMailParser
         return $this;
     }
     
+    /**
+     * EmailParser::getMessage()
+     * 
+     * @param mixed $format
+     * @return
+     */
     public function getMessage($format=null){
         $contentPart = $this->contentPartsData->get($format);
         $contentPart = (!$contentPart) ? $this->defaultPart : $contentPart;
         return $this->contentPartsData->get('data')[$contentPart];
     }
     
+    /**
+     * EmailParser::getContentHeaders()
+     * 
+     * @param mixed $contentPart
+     * @return
+     */
     public function getContentHeaders($contentPart)
     {
         $headers = $this->getPart('headers',$contentPart);
@@ -84,10 +113,22 @@ class EmailParser extends PhpMimeMailParser
         return false;
     }
     
+    /**
+     * EmailParser::getBody()
+     * 
+     * @param mixed $contentPart
+     * @return
+     */
     protected function getBody($contentPart){
         return $this->charset->decodeCharset($this->decodeContentTransfer($this->getPartBody($contentPart), $this->getEncodingType($contentPart)), $this->getPartCharset($contentPart));
     }
     
+    /**
+     * EmailParser::getEncodingType()
+     * 
+     * @param mixed $contentPart
+     * @return
+     */
     protected function getEncodingType($contentPart)
     {
         $headers = $this->getPart('headers', $contentPart);

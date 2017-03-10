@@ -68,6 +68,7 @@ class ImapMessage
         $this->messageCc        = ($this->headerExists('Cc')) ? \mailparse_rfc822_parse_addresses($this->headerGet('Cc')) : null;
         $this->messageBcc       = ($this->headerExists('Bcc')) ? \mailparse_rfc822_parse_addresses($this->headerGet('Bcc')) : null;
         $this->messageSubject   = $this->headerGet('Subject', self::NO_SUBJECT);
+        $this->messageDate      = $this->headerGet('Date');
         $this->messageId        = $this->headerGet('Message-ID');
         return $this;
     }
