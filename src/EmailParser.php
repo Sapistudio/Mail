@@ -42,35 +42,37 @@ class EmailParser extends PhpMimeMailParser
     public function loadMailText($data)
     {
         $this->setText($data);
-        $parts = [];
+        $start = 1;
         foreach ($this->parts as $part_id => $contentPart)
         {
             $contentType = $this->getPart('content-type', $contentPart);
-            $total = count(explode('.', $part_id));
+            $total       = count(explode('.', $part_id));
             if (in_array($contentType, $this->defaultMimeTypes))
             {
                 if(count($this->parts)==1 || $part_id==$this->defaultPart){
-                    $keyIndex = $total;
+                    $keyIndex = $start;
                     $parts[$keyIndex]['type']       = $contentType;
                     $parts[$keyIndex]['headers']    = $this->getContentHeaders($contentPart);
                     $parts[$keyIndex]['headersRaw'] = $this->getPartHeader($contentPart);
                     $parts[$keyIndex]['rawContent'] = $this->getPartComplete($contentPart);
                     $this->contentPartsData->put($contentType,$keyIndex);
-                }else
-                    $keyIndex = $total - 1;
+                }else{
+                    $currentIndex   = $start - 1;
+                    $keyIndex       = ($total==$currentIndex) ? $currentIndex - 1 : $currentIndex;
+                    $parts[$keyIndex]['headers']    = array_merge($parts[$currentIndex]['headers'],$this->getContentHeaders($contentPart));
+                    $parts[$keyIndex]['headersRaw'] .= "\n".$this->getPartHeader($contentPart);
+                }
                 $parts[$keyIndex][array_search($contentType, $this->defaultMimeTypes)] = $this->getBody($contentPart);
             }else
             {
-                if (!isset($parts[$total]))
-                {
-                    $parts[$total]['type']       = $contentType;
-                    if($total!=$this->defaultPart)
-                        $parts[$total]['text']   = $this->getBody($contentPart);
-                    $parts[$total]['headers']    = $this->getContentHeaders($contentPart);
-                    $parts[$total]['headersRaw'] = $this->getPartHeader($contentPart);
-                    $parts[$total]['rawContent'] = $this->getPartComplete($contentPart);
-                    $this->contentPartsData->put($contentType,$total);
-                }
+                $parts[$start]['type']       = $contentType;
+                if($start!=$this->defaultPart)
+                    $parts[$start]['text']   = $this->getBody($contentPart);
+                $parts[$start]['headers']    = $this->getContentHeaders($contentPart);
+                $parts[$start]['headersRaw'] = $this->getPartHeader($contentPart);
+                $parts[$start]['rawContent'] = $this->getPartComplete($contentPart);
+                $this->contentPartsData->put($contentType,$start);
+                $start++;
             }
         }
         $this->contentPartsData->put('data',$parts);
@@ -84,11 +86,20 @@ class EmailParser extends PhpMimeMailParser
      * @return
      */
     public function getMessage($format=null){
-        $contentPart = $this->contentPartsData->get($format);
-        $contentPart = (!$contentPart) ? $this->defaultPart : $contentPart;
+        $contentPart = (is_null($format)) ? $this->defaultPart : $this->loadMessageFormat($format);                
         return $this->contentPartsData->get('data')[$contentPart];
     }
     
+    /**
+     * EmailParser::loadMessageFormat()
+     * 
+     * @param mixed $format
+     * @return
+     */
+    public function loadMessageFormat($format){
+        return $this->contentPartsData->get($format);   
+    }  
+            
     /**
      * EmailParser::getContentHeaders()
      * 
