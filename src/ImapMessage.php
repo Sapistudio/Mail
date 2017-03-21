@@ -56,6 +56,56 @@ class ImapMessage
     }
     
     /**
+     * ImapMessage::hasFormat()
+     * 
+     * @param mixed $format
+     * @return
+     */
+    public function hasFormat($format=null){
+        return $this->parser->loadMessageFormat($format);   
+    }
+    
+    /**
+     * ImapMessage::getHeaders()
+     * 
+     * @return
+     */
+    public function getHeaders(){
+        return $this->messageheaders;
+    }
+    
+    /**
+     * ImapMessage::bodyToHeaders()
+     * 
+     * @return
+     */
+    public function bodyToHeaders(){
+        $this->messageheaders = $this->stringToHeaders($this->rawMessage());
+        return $this->getHeaders();        
+    }
+    
+    /**
+     * ImapMessage::stringToHeaders()
+     * 
+     * @param mixed $string
+     * @return
+     */
+    public function stringToHeaders($string=null){
+        if(is_null($string))
+            return false;
+        $headers=array();
+        $separator = "\r\n";
+        $line = strtok($string, $separator);
+        while ($line !== false)
+        {
+            $linedata = explode(':', $line);
+            $headers[strtolower(trim($linedata[0]))] = trim($linedata[1]);
+            $line = strtok($separator);
+        }
+        return $headers;
+    }
+        
+    /**
      * Message::prepare()
      * 
      * @return
@@ -81,7 +131,7 @@ class ImapMessage
      */
     public function setFlags($flags){
         $this->messageFlags  = array_map("strtolower",array_filter(explode(" ",$flags)));
-        $this->messageStatus = (in_array('\\seen', $this->messageFlags)) ? 'read' : 'unread';
+        $this->messageStatus = (in_array('\\seen', $this->messageFlags)) ? true : false;
         return $this;    
     }
     
@@ -131,7 +181,11 @@ class ImapMessage
     {
         return Arr::get($this->messageheaders, strtolower($key), $default);
     }
-
+    
+    public function getSendingIp(){
+        return ($this->headerExists('x-originating-ip')) ? trim(str_replace(['[',']'],'',$this->headerGet('x-originating-ip'))) : null;
+    }
+            
     /**
      * Message::Plain()
      * 
@@ -193,6 +247,10 @@ class ImapMessage
      */
     public function Status()
     {
+        return ($this->messageStatus) ? 'read' : 'unread';
+    }
+    
+    public function isSeen(){
         return $this->messageStatus;
     }
     
