@@ -452,7 +452,7 @@ class ImapClient
                 $emailRaw = array_slice($response, $details['start'], ($details['end'] - $details['start'] + 1));
                 if (!empty($emailRaw) && strpos(trim($emailRaw[count($emailRaw) - 1]), ')') === 0)
                     $emailRaw[count($emailRaw) - 1]=null;
-                preg_match("/\(UID (.*?)\)/", $details['line'], $searchUids);
+                preg_match("/.*UID\s(\d+).*/", $details['line'], $searchUids);
                 preg_match("/FLAGS \((.*?)\)/", $details['line'], $searchFlags);
                 preg_match("/RFC822.SIZE (.*?) /", $details['line'], $searchSize);
                 $iUids = filter_var($searchUids[1], FILTER_SANITIZE_NUMBER_INT);
