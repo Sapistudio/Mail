@@ -272,4 +272,15 @@ class Mailer
         $this->calls[$method] = $parameters;
         return $this;
     }
+    
+    /**
+     * Mailer::__get()
+     * 
+     * @param mixed $property
+     * @return
+     */
+    public function __get($property)
+    {
+        return (isset($this->calls[$property])) ? $this->calls[$property] : null;
+    }
 }
