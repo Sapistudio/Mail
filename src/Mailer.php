@@ -42,7 +42,7 @@ class Mailer
     }
     
     /**
-     * Mailer::header()
+     * Mailer::addHeader()
      * 
      * @param mixed $name
      * @param mixed $value
@@ -58,7 +58,19 @@ class Mailer
     }
     
     /**
-     * Mailer::header()
+     * Mailer::getHeader()
+     * 
+     * @param mixed $name
+     * @param mixed $value
+     * @return
+     */
+    public function getHeader($name='')
+    {
+        return (isset($this->addHeaders[$name])) ? $this->addHeaders[$name] : '';
+    }
+    
+    /**
+     * Mailer::removeHeader()
      * 
      * @param mixed $name
      * @param mixed $value
