@@ -66,9 +66,9 @@ class Mailer
      * @return
      */
     public function getHeader($name='')
-    {echo $name;
-        $name = strtolower($name);
-        echo $name;return (isset($this->addHeaders[$name])) ? $this->addHeaders[$name] : '';
+    {
+        $name = strtolower(trim($name));
+        return (isset($this->addHeaders[$name])) ? $this->addHeaders[$name] : '';
     }
     
     /**
