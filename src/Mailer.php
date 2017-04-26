@@ -55,7 +55,6 @@ class Mailer
         else
             $this->addHeaders[$name] = $value;
         $this->addHeaders = array_change_key_case($this->addHeaders,CASE_LOWER );
-        var_dump($this->addHeaders);
         return $this;
     }
     
@@ -67,9 +66,9 @@ class Mailer
      * @return
      */
     public function getHeader($name='')
-    {
+    {echo $name;
         $name = strtolower($name);
-        return (isset($this->addHeaders[$name])) ? $this->addHeaders[$name] : '';
+        echo $name;return (isset($this->addHeaders[$name])) ? $this->addHeaders[$name] : '';
     }
     
     /**
