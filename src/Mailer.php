@@ -54,6 +54,10 @@ class Mailer
             $this->addHeaders = array_merge($this->addHeaders,$name);
         else
             $this->addHeaders[$name] = $value;
+        array_walk($this->addHeaders, function(&$value, &$key) {
+            $key = strtolower($key);
+        });
+        var_dump($this->addHeaders);
         return $this;
     }
     
