@@ -15,6 +15,7 @@ class FetchTypes
     const EXPUNGE = 'EXPUNGE';
     const CREATE = 'CREATE';
     const DELETE = 'DELETE';
+    const UID_MOVE = 'UID MOVE';
     const UID_SEARCH = 'UID SEARCH';
     const STARTTLS = 'STARTTLS';
     const LOGOUT = 'LOGOUT';
