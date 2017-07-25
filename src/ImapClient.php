@@ -313,7 +313,15 @@ class ImapClient
         $this->sendCommand(FetchTypes::UID_COPY,[$uid,$mailbox]);
         return $this->MessageRemove($uid);
     }
-    
+	
+    public function MoveMessages($uids=[], $mailbox)
+    {
+        if (!$this->isConnected())
+            return false;
+        return $this->sendCommand(FetchTypes::UID_MOVE,[implode(',',$uids),$mailbox]);
+        //return $this->MessageRemove($uid);
+    }
+	 
     /**
      * ImapClient::MessageCopy()
      * 
