@@ -54,7 +54,7 @@ class EmailParser extends PhpMimeMailParser
                     $parts[$keyIndex]['type']       = $contentType;
                     $parts[$keyIndex]['headers']    = $this->getContentHeaders($contentPart);
                     $parts[$keyIndex]['headersRaw'] = $this->getPartHeader($contentPart);
-                    $parts[$keyIndex]['rawContent'] = $this->getPartComplete($contentPart);
+                    $parts[$keyIndex]['rawContent'] = $this->getData();
                     $this->contentPartsData->put($contentType,$keyIndex);
                 }else{
                     $currentIndex   = $start - 1;
