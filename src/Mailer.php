@@ -72,6 +72,21 @@ class Mailer
     }
     
     /**
+     * Mailer::getHeader()
+     * 
+     * @param mixed $name
+     * @param mixed $value
+     * @return
+     */
+    public function getMessageHeaderValue($headerName=null)
+    {
+        $headerName = strtolower(trim($headerName));
+        if(!$this->message)
+            $this->createMessage();
+        return ($this->message->getHeaders()->get('from')) ? $this->message->getHeaders()->get($headerName)->getFieldBody() : null;
+    }
+    
+    /**
      * Mailer::removeHeader()
      * 
      * @param mixed $name
@@ -132,11 +147,6 @@ class Mailer
         $this->addContent($view, $plain, $raw);
         $this->message->setCharset($this->_charset);
         $this->message->setEncoder($this->_encoder);
-        if($this->calls){
-            /** Dynamically pass missing methods to the Swift message.*/
-            foreach($this->calls as $method=>$parameters)
-                call_user_func_array([$this->message, $method], $parameters);
-        }
         $this->parseHeaders();
         $this->sendSwiftMessage($this->message->getSwiftMessage());
         $this->resetMessage();
@@ -161,7 +171,6 @@ class Mailer
         }
         if ($this->removeHeaders && is_array($this->removeHeaders)){
             foreach ($this->removeHeaders as $k => $value){
-                echo $header;
                 $this->message->getHeaders()->removeAll($value);
             }
         }
@@ -229,6 +238,11 @@ class Mailer
         $message = new Message(new Swift_Message);
         $message->from($this->from)->setEncoder($this->_encoder);
         $this->message = $message;
+        if($this->calls){
+            /** Dynamically pass missing methods to the Swift message.*/
+            foreach($this->calls as $method=>$parameters)
+                call_user_func_array([$this->message, $method], $parameters);
+        }
     }
 
     /**
