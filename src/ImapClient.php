@@ -290,8 +290,8 @@ class ImapClient
         $aTypes    = [FolderResponseStatus::MESSAGES,FolderResponseStatus::UNSEEN,FolderResponseStatus::UIDNEXT,FolderResponseStatus::HIGHESTMODSEQ];
         foreach ($response as $line)
         {
-            $folder   = ImapFolder::make($line->ResponseList[4],$line->ResponseList[3],$line->ResponseList[2]);
-            $response = ImapResponse::getStatusResponse($this->sendCommand(FetchTypes::STATUS,$this->escape($line->ResponseList[4]).'('.implode(' ',$aTypes).')'),FetchTypes::STATUS);
+            $folder   = Imap\ImapFolder::make($line->ResponseList[4],$line->ResponseList[3],$line->ResponseList[2]);
+            $response = Imap\ImapResponse::getStatusResponse($this->sendCommand(FetchTypes::STATUS,$this->escape($line->ResponseList[4]).'('.implode(' ',$aTypes).')'),FetchTypes::STATUS);
             if($response){
                 $data = array_chunk($response->ResponseList[3], 2);
                 foreach($data as $a=>$b){
@@ -472,7 +472,7 @@ class ImapClient
                 $iUids = filter_var($searchUids[1], FILTER_SANITIZE_NUMBER_INT);
                 $uids[] = $iUids;
                 if($emailRaw){
-                    $emails[$iUids] = ImapMessage::make($emailRaw)->setFlags($searchFlags[1])->setOptions(['messageFolder' => $this->currentMailbox, 'messageUid' => $iUids, 'messageSize' => filter_var($searchSize[1],FILTER_SANITIZE_NUMBER_INT)])->load();
+                    $emails[$iUids] = Imap\ImapMessage::make($emailRaw)->setFlags($searchFlags[1])->setOptions(['messageFolder' => $this->currentMailbox, 'messageUid' => $iUids, 'messageSize' => filter_var($searchSize[1],FILTER_SANITIZE_NUMBER_INT)])->load();
                 }
             }
         }
