@@ -1,5 +1,5 @@
 <?php
-namespace SapiStudio\SapiMail;
+namespace SapiStudio\SapiMail\Imap;
 
 class ImapFolder
 {
