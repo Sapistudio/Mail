@@ -89,7 +89,22 @@ class Smtp
      * @var bool $debugging If true outputs the logs
      */
     private $debugging = true;
-
+    
+    /**
+     * Smtp::make()
+     * 
+     * @param mixed $host
+     * @param mixed $user
+     * @param mixed $pass
+     * @param mixed $port
+     * @param bool $ssl
+     * @param bool $tls
+     * @return
+     */
+    public static function make($host = null, $user = null, $pass = null, $port = null, $ssl = true, $tls = false){
+        return new static($host,$user,$pass,$port,$ssl,$tls);
+    }
+    
     /**
      * Smtp::__construct()
      * 
@@ -101,15 +116,15 @@ class Smtp
      * @param bool $tls
      * @return
      */
-    public function __construct($host, $user, $pass, $port = null, $ssl = false, $tls = false) {
+    public function __construct($host = null, $user = null, $pass = null, $port = null, $ssl = true, $tls = false) {
         if (is_null($port))
             $port = $ssl ? 465 : 25;
         $this->host         = $host;
         $this->username     = $user;
         $this->password     = $pass;
         $this->port         = $port;
-        $this->ssl          = true;
-        $this->tls          = $ssl;
+        $this->ssl          = $ssl;
+        $this->tls          = $tls;
         $this->boundary[]   = md5(time().'1');
         $this->boundary[]   = md5(time().'2');
     }
