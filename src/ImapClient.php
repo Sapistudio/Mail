@@ -28,6 +28,7 @@ class ImapClient
     private $debugging          = false;
     private $rawCommands        = [];
     
+    
     /**
      * ImapClient::make()
      * 
@@ -38,24 +39,35 @@ class ImapClient
     }
     
     /**
-     * ImapClient::connect()
+     * ImapClient::testConnection()
      * 
      * @param mixed $host
      * @param mixed $port
      * @param bool $ssl
      * @param bool $tls
-     * @param mixed $timeout
-     * @param bool $test
      * @return
      */
-    public function connect($host,$port = null, $ssl = false, $tls = false,$timeout = self::TIMEOUT, $test = false)
+    public static function testConnection($host=null,$port = null, $ssl = true, $tls = false){
+        return self::make()->initConnection($host,$port, $ssl, $tls)->LogoutAndDisconnect();
+    }
+    
+    /**
+     * ImapClient::initConnection()
+     * 
+     * @param mixed $host
+     * @param mixed $port
+     * @param bool $ssl
+     * @param bool $tls
+     * @return
+     */
+    public function initConnection($host=null,$port = null, $ssl = true, $tls = false)
     {
         if (is_null($port))
             $port   = $ssl ? 993 : 143;
         $this->host = $host;
         $this->port = $port;
         $this->ssl  = $ssl;
-        $this->tls  = $tls;                
+        $this->tls  = $tls;
         if ($this->socket)
             return $this;
         $host = $this->host;
@@ -64,7 +76,7 @@ class ImapClient
         $context = stream_context_create(['ssl' => ['verify_peer' => false,'verify_peer_name' => false, 'allow_self_signed' => true]]);
         if ($this->BindIp != '')
             $context = ['socket' => ['bindto' => $this->BindIp . ':0']];
-        $this->socket = stream_socket_client($host . ':' . $this->port . '', $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
+        $this->socket = stream_socket_client($host . ':' . $this->port . '', $errno, $errstr, self::TIMEOUT, STREAM_CLIENT_CONNECT, $context);
         if (!$this->socket)
             throw new Exception(exception::SERVER_ERROR);           
         if ($this->makeResponseLine()->StatusOrIndex != ResponseStatus::OK)
@@ -81,24 +93,18 @@ class ImapClient
                 throw new Exception(exception::TLS_ERROR);
             }
         }
-        if ($test)
-        {
-            fclose($this->socket);
-            $this->socket = null;
-            return $this;
-        }
         $this->isConnected = true;        
         return $this;
     }
     
     /**
-     * ImapClient::Login()
+     * ImapClient::loginToMailbox()
      * 
      * @param mixed $user
      * @param mixed $password
      * @return
      */
-    public function Login($user,$password)
+    public function loginToMailbox($user,$password)
     {
         if (!$this->isConnected())
             return false;
