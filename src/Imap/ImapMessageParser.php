@@ -1,10 +1,10 @@
 <?php
-namespace SapiStudio\SapiMail;
+namespace SapiStudio\SapiMail\Imap;
 
 use PhpMimeMailParser\Parser as PhpMimeMailParser;
 use Illuminate\Support\Collection;
 
-class EmailParser extends PhpMimeMailParser
+class ImapMessageParser extends PhpMimeMailParser
 {
     public $contentPartsData = null;
     protected $defaultMimeTypes = ['text' => 'text/plain', 'html' => 'text/html'];
