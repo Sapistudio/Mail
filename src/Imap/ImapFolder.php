@@ -21,7 +21,7 @@ class ImapFolder
             $Delimiter = '.';
         if (!\is_array($aFlags) || !\is_string($Delimiter) || 1 < \strlen($Delimiter) || !\is_string($sFullNameRaw) || 0 === \strlen($sFullNameRaw))
         {
-            throw new \MailSo\Base\Exceptions\InvalidArgumentException();
+            throw new \Exception('Invalid argument');
         }
         $this->sFullNameRaw = $sFullNameRaw;
         $this->sDelimiter   = $Delimiter;
