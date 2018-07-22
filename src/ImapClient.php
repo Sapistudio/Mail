@@ -656,7 +656,7 @@ class ImapClient
      */
     protected function makeResponseLine()
     {
-        return ImapResponse::make(trim($this->getRawResponseLine(),"\n"));
+        return Imap\ImapResponse::make(trim($this->getRawResponseLine(),"\n"));
     }
     
     /**
@@ -685,7 +685,7 @@ class ImapClient
         while (time() < ($start + self::TIMEOUT))
         {
             $line     = trim($this->getRawResponseLine(),"\n");
-            $response = ImapResponse::make($line);
+            $response = Imap\ImapResponse::make($line);
             $this->bufferResponse[] = $response;
             if ($response->ResponseTag == 'TAG' . $this->currentTag){
                 $this->commandResponse = array_pop($this->bufferResponse);
