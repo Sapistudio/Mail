@@ -9,12 +9,10 @@ class ImapMessageParser extends PhpMimeMailParser
     public $contentPartsData = null;
     protected $defaultMimeTypes = ['text' => 'text/plain', 'html' => 'text/html'];
     protected $defaultPart      = 1;
+    protected $defaultFormat    = null;
     
     /**
      * EmailParser::make()
-     * 
-     * @param mixed $raw
-     * @return
      */
     public static function make($raw){
         return (new self())->loadMailText($raw);
@@ -22,10 +20,6 @@ class ImapMessageParser extends PhpMimeMailParser
     
     /**
      * EmailParser::__construct()
-     * 
-     * @param mixed $messageId
-     * @param mixed $flags
-     * @return
      */
     public function __construct($messageId=null,$flags=null)
     {
@@ -35,14 +29,12 @@ class ImapMessageParser extends PhpMimeMailParser
     
     /**
      * EmailParser::loadMailText()
-     * 
-     * @param mixed $data
-     * @return
      */
     public function loadMailText($data)
     {
         $this->setText($data);
         $start = 1;
+        
         foreach ($this->parts as $part_id => $contentPart)
         {
             $contentType = $this->getPart('content-type', $contentPart);
@@ -53,24 +45,22 @@ class ImapMessageParser extends PhpMimeMailParser
                     $keyIndex = $start;
                     $parts[$keyIndex]['type']       = $contentType;
                     $parts[$keyIndex]['headers']    = $this->getContentHeaders($contentPart);
-                    $parts[$keyIndex]['headersRaw'] = $this->getPartHeader($contentPart);
-                    $parts[$keyIndex]['rawContent'] = $this->getData();
                     $this->contentPartsData->put($contentType,$keyIndex);
                 }else{
                     $currentIndex   = $start - 1;
                     $keyIndex       = ($total==$currentIndex) ? $currentIndex - 1 : $currentIndex;
                     $parts[$keyIndex]['headers']    = array_merge($parts[$currentIndex]['headers'],$this->getContentHeaders($contentPart));
-                    $parts[$keyIndex]['headersRaw'] .= "\n".$this->getPartHeader($contentPart);
                 }
-                $parts[$keyIndex][array_search($contentType, $this->defaultMimeTypes)] = $this->getBody($contentPart);
+                $keyToWrite = ($this->defaultFormat != 'multipart/alternative') ? $this->defaultPart : $keyIndex;
+                $parts[$keyToWrite][array_search($contentType, $this->defaultMimeTypes)] = $this->getBody($contentPart);
             }else
             {
+                if($start == $this->defaultPart)
+                    $this->defaultFormat = $contentType;
                 $parts[$start]['type']       = $contentType;
                 if($start!=$this->defaultPart)
                     $parts[$start]['text']   = $this->getBody($contentPart);
                 $parts[$start]['headers']    = $this->getContentHeaders($contentPart);
-                $parts[$start]['headersRaw'] = $this->getPartHeader($contentPart);
-                $parts[$start]['rawContent'] = $this->getPartComplete($contentPart);
                 $this->contentPartsData->put($contentType,$start);
                 $start++;
             }
@@ -81,9 +71,6 @@ class ImapMessageParser extends PhpMimeMailParser
     
     /**
      * EmailParser::getMessage()
-     * 
-     * @param mixed $format
-     * @return
      */
     public function getMessage($format=null){
         $contentPart = (is_null($format)) ? $this->defaultPart : $this->loadMessageFormat($format);                
@@ -92,9 +79,6 @@ class ImapMessageParser extends PhpMimeMailParser
     
     /**
      * EmailParser::loadMessageFormat()
-     * 
-     * @param mixed $format
-     * @return
      */
     public function loadMessageFormat($format){
         return $this->contentPartsData->get($format);   
@@ -102,9 +86,6 @@ class ImapMessageParser extends PhpMimeMailParser
             
     /**
      * EmailParser::getContentHeaders()
-     * 
-     * @param mixed $contentPart
-     * @return
      */
     public function getContentHeaders($contentPart)
     {
@@ -113,10 +94,11 @@ class ImapMessageParser extends PhpMimeMailParser
             foreach ($headers as $name => &$value) {
                 if (is_array($value)) {
                     foreach ($value as &$v) {
-                        $v = $this->decodeSingleHeader($v);
+                        //$v = $this->decodeSingleHeader($v);
+                        $v = $this->decodeMimeHeader($v);
                     }
                 } else {
-                    $value = $this->decodeSingleHeader($value);
+                    $value = $this->decodeMimeHeader($value);
                 }
             }
             return $headers;
@@ -125,10 +107,20 @@ class ImapMessageParser extends PhpMimeMailParser
     }
     
     /**
+     * EmailParser::decodeMimeHeader()
+     */
+    protected function decodeMimeHeader($str)
+    {
+        if (strpos($str, '=?') === false)
+            return $str;
+        $value = mb_decode_mimeheader($str);
+        if (strpos($str, '?Q') !== false)
+            $value = str_replace('_', ' ', $value);
+        return filter_var($value, FILTER_UNSAFE_RAW, FILTER_FLAG_STRIP_LOW|FILTER_FLAG_STRIP_HIGH);
+    }
+    
+    /**
      * EmailParser::getBody()
-     * 
-     * @param mixed $contentPart
-     * @return
      */
     protected function getBody($contentPart){
         return $this->charset->decodeCharset($this->decodeContentTransfer($this->getPartBody($contentPart), $this->getEncodingType($contentPart)), $this->getPartCharset($contentPart));
@@ -136,9 +128,6 @@ class ImapMessageParser extends PhpMimeMailParser
     
     /**
      * EmailParser::getEncodingType()
-     * 
-     * @param mixed $contentPart
-     * @return
      */
     protected function getEncodingType($contentPart)
     {

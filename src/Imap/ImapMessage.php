@@ -26,40 +26,84 @@ class ImapMessage
     private $messageheaders;
     private $rawMessageContent;
     private $parser;
+    private $hasAttachements = false;
+    private $internalDate    = null;
 
     /**
      * Message::make()
-     * 
-     * @param mixed $rawContent
-     * @return
      */
     public static function make($rawContent)
     {
-        $self         = new self;
-        $self->parser = ImapMessageParser::make((is_array($rawContent)) ? implode("\n", $rawContent) : $rawContent);
-        return $self;
+        $rawContent     = trim((is_array($rawContent)) ? implode("\n", $rawContent) : $rawContent);
+        $self           = new self;
+        $self->parser   = ImapMessageParser::make($rawContent);
+        $self->rawMessageContent = $rawContent;
+        $rawContent     = preg_replace('/\r\n/',"\n",$rawContent);
+        $rawContent     = preg_replace('/\r/',"\n",$rawContent);
+        preg_match("/(.*?)\n\n(.*)/s",$rawContent,$overview);
+        if(!isset($overview[2]) || !$overview){
+            $self->messageheaders = $self->parseHeader($rawContent);
+            return $self->prepare();
+        }
+        return $self->loadMessagePart();
+    }
+    
+    private function parseHeader($str){
+        $str = explode("\n",preg_replace('/\n\s+/',' ',$str));
+        $h = array();
+        foreach($str as $k=>$v){
+            if(!$v) continue;
+            $p=strpos($v,':');
+            $headerName         = strtolower(substr($v,0,$p));
+            $h[$headerName]     = filter_var(trim(substr($v,$p+1)), FILTER_UNSAFE_RAW, FILTER_FLAG_ENCODE_LOW|FILTER_FLAG_STRIP_HIGH);
+        }
+        return array_map('mb_decode_mimeheader',$h);
+    }
+    
+    public function setAttachements($attach = false){
+        $this->hasAttachements = $attach;
+        return $this;
+    }
+    
+    public function hasAttachements(){
+        return $this->hasAttachements;
+    }
+    
+    public function getAttachementList(){
+        $attachs        = [];
+        $attachments    = $this->parser->getAttachments([true]);
+        if (count($attachments) > 0) {
+	       foreach ($attachments as $attachment) {
+		      $attachs[] = $attachment->getFilename();
+	       }
+        }
+        return $attachs;
+    }
+    
+    public function getAttachement($name = ''){
+        $attachments    = $this->parser->getAttachments([true]);
+        if (count($attachments) > 0) {
+	       foreach ($attachments as $attachment) {
+	           if($attachment->getFilename() == $name)
+                    return $attachment;
+	       }
+        }
+        return false;
     }
     
     /**
-     * Message::load()
-     * 
-     * @param mixed $format
-     * @return
+     * Message::loadMessagePart()
      */
-    public function load($format=null){
+    public function loadMessagePart($format=null){
         $mail = $this->parser->getMessage($format);
         if(!$mail)
             return false;
-        $this->rawMessageContent = $mail['rawContent'];
         $this->messageheaders    = $mail['headers'];
-        return $this->SetHtml($mail['html'])->SetPlain($mail['text'])->prepare();
+        return $this->SetHtml($mail['html'])->SetPlain(nl2br($mail['text']))->prepare();
     }
     
     /**
      * ImapMessage::hasFormat()
-     * 
-     * @param mixed $format
-     * @return
      */
     public function hasFormat($format=null){
         return $this->parser->loadMessageFormat($format);   
@@ -67,8 +111,6 @@ class ImapMessage
     
     /**
      * ImapMessage::getHeaders()
-     * 
-     * @return
      */
     public function getHeaders(){
         return $this->messageheaders;
@@ -76,8 +118,6 @@ class ImapMessage
     
     /**
      * ImapMessage::bodyToHeaders()
-     * 
-     * @return
      */
     public function bodyToHeaders(){
         $this->messageheaders = $this->stringToHeaders($this->rawMessage());
@@ -86,9 +126,6 @@ class ImapMessage
     
     /**
      * ImapMessage::stringToHeaders()
-     * 
-     * @param mixed $string
-     * @return
      */
     public function stringToHeaders($string=null){
         if(is_null($string))
@@ -104,11 +141,17 @@ class ImapMessage
         }
         return $headers;
     }
+    
+    public function headerToString(){
+        $ret = '';
+        foreach($this->getHeaders() as $key=>$headerValue){
+            $ret .=(is_array($headerValue)) ? implode(" ",$headerValue) : $headerValue."\n";
+        }
+        return $ret;
+    }
         
     /**
      * Message::prepare()
-     * 
-     * @return
      */
     protected function prepare()
     {
@@ -118,16 +161,13 @@ class ImapMessage
         $this->messageCc        = ($this->headerExists('Cc')) ? \mailparse_rfc822_parse_addresses($this->headerGet('Cc')) : null;
         $this->messageBcc       = ($this->headerExists('Bcc')) ? \mailparse_rfc822_parse_addresses($this->headerGet('Bcc')) : null;
         $this->messageSubject   = $this->headerGet('Subject', self::NO_SUBJECT);
-        $this->messageDate      = $this->headerGet('Date');
+        $this->messageDate      = $this->headerGet('Date',null);
         $this->messageId        = $this->headerGet('Message-ID');
         return $this;
     }
     
     /**
      * Message::setFlags()
-     * 
-     * @param mixed $flags
-     * @return
      */
     public function setFlags($flags){
         $this->messageFlags  = array_map("strtolower",array_filter(explode(" ",$flags)));
@@ -136,9 +176,17 @@ class ImapMessage
     }
     
     /**
+     * Message::setInternalDate()
+     */
+    public function setInternalDate($date = null){
+        $this->internalDate  = trim($date);
+        if(trim($this->messageDate)=='')
+            $this->messageDate = $this->internalDate;
+        return $this;    
+    }
+    
+    /**
      * Message::GetBody()
-     * 
-     * @return
      */
     public function GetBody(){
         return ($this->Html() != '') ? $this->Html() : str_replace("\n",'',$this->Plain());
@@ -146,9 +194,6 @@ class ImapMessage
     
     /**
      * Message::headerExists()
-     * 
-     * @param mixed $key
-     * @return
      */
     public function headerExists($key)
     {
@@ -157,10 +202,6 @@ class ImapMessage
 
     /**
      * Message::setOptions()
-     * 
-     * @param mixed $key
-     * @param mixed $value
-     * @return
      */
     public function setOptions($key, $value = null)
     {
@@ -172,14 +213,11 @@ class ImapMessage
 
     /**
      * Message::headerGet()
-     * 
-     * @param mixed $key
-     * @param mixed $default
-     * @return
      */
     public function headerGet($key, $default = null)
     {
-        return Arr::get($this->messageheaders, strtolower($key), $default);
+        $arrValue = Arr::get($this->messageheaders, strtolower($key), $default);
+        return filter_var($arrValue, FILTER_UNSAFE_RAW, FILTER_FLAG_ENCODE_LOW|FILTER_FLAG_STRIP_HIGH);
     }
     
     public function getSendingIp(){
@@ -188,8 +226,6 @@ class ImapMessage
             
     /**
      * Message::Plain()
-     * 
-     * @return
      */
     public function Plain()
     {
@@ -198,8 +234,6 @@ class ImapMessage
 
     /**
      * Message::rawMessage()
-     * 
-     * @return
      */
     public function rawMessage()
     {
@@ -208,8 +242,6 @@ class ImapMessage
     
     /**
      * Message::Html()
-     * 
-     * @return
      */
     public function Html()
     {
@@ -218,9 +250,6 @@ class ImapMessage
 
     /**
      * Message::SetHtml()
-     * 
-     * @param mixed $sHtml
-     * @return
      */
     public function SetHtml($sHtml)
     {
@@ -230,9 +259,6 @@ class ImapMessage
 
     /**
      * Message::SetPlain()
-     * 
-     * @param mixed $plain
-     * @return
      */
     public function SetPlain($plain)
     {
@@ -242,8 +268,6 @@ class ImapMessage
     
     /**
      * Message::Status()
-     * 
-     * @return
      */
     public function Status()
     {
@@ -256,8 +280,6 @@ class ImapMessage
     
     /**
      * Message::Folder()
-     * 
-     * @return
      */
     public function Folder()
     {
@@ -266,8 +288,6 @@ class ImapMessage
 
     /**
      * Message::Uid()
-     * 
-     * @return
      */
     public function Uid()
     {
@@ -276,8 +296,6 @@ class ImapMessage
 
     /**
      * Message::MessageId()
-     * 
-     * @return
      */
     public function MessageId()
     {
@@ -286,8 +304,6 @@ class ImapMessage
 
     /**
      * Message::Subject()
-     * 
-     * @return
      */
     public function Subject()
     {
@@ -296,8 +312,6 @@ class ImapMessage
 
     /**
      * Message::ContentType()
-     * 
-     * @return
      */
     public function ContentType()
     {
@@ -306,8 +320,6 @@ class ImapMessage
 
     /**
      * Message::Size()
-     * 
-     * @return
      */
     public function Size()
     {
@@ -316,8 +328,6 @@ class ImapMessage
 
     /**
      * Message::Date()
-     * 
-     * @return
      */
     public function Date()
     {
@@ -326,19 +336,14 @@ class ImapMessage
 
     /**
      * Message::Flags()
-     * 
-     * @return
      */
     public function Flags()
     {
         return $this->messageFlags;
     }
 
-
     /**
      * Message::From()
-     * 
-     * @return
      */
     public function From()
     {
@@ -347,19 +352,14 @@ class ImapMessage
 
     /**
      * Message::ReplyTo()
-     * 
-     * @return
      */
     public function ReplyTo()
     {
         return $this->messageReplyTo;
     }
 
-
     /**
      * Message::To()
-     * 
-     * @return
      */
     public function To()
     {
@@ -368,8 +368,6 @@ class ImapMessage
 
     /**
      * Message::Cc()
-     * 
-     * @return
      */
     public function Cc()
     {
@@ -378,8 +376,6 @@ class ImapMessage
 
     /**
      * Message::Bcc()
-     * 
-     * @return
      */
     public function Bcc()
     {
@@ -388,8 +384,6 @@ class ImapMessage
 
     /**
      * Message::Attachments()
-     * 
-     * @return
      */
     public function Attachments()
     {

@@ -27,12 +27,10 @@ class ImapClient
     protected $isConnected      = false;
     private $debugging          = false;
     private $rawCommands        = [];
-    
+    protected $mailsPagination  = 25;
     
     /**
      * ImapClient::make()
-     * 
-     * @return
      */
     public static function make(){
         return new self;
@@ -40,12 +38,6 @@ class ImapClient
     
     /**
      * ImapClient::testConnection()
-     * 
-     * @param mixed $host
-     * @param mixed $port
-     * @param bool $ssl
-     * @param bool $tls
-     * @return
      */
     public static function testConnection($host=null,$port = null, $ssl = true, $tls = false){
         return self::make()->initConnection($host,$port, $ssl, $tls)->LogoutAndDisconnect();
@@ -53,12 +45,6 @@ class ImapClient
     
     /**
      * ImapClient::initConnection()
-     * 
-     * @param mixed $host
-     * @param mixed $port
-     * @param bool $ssl
-     * @param bool $tls
-     * @return
      */
     public function initConnection($host=null,$port = null, $ssl = true, $tls = false)
     {
@@ -99,10 +85,6 @@ class ImapClient
     
     /**
      * ImapClient::loginToMailbox()
-     * 
-     * @param mixed $user
-     * @param mixed $password
-     * @return
      */
     public function loginToMailbox($user,$password)
     {
@@ -119,8 +101,6 @@ class ImapClient
     
     /**
      * ImapClient::isConnected()
-     * 
-     * @return
      */
     public function isConnected(){
         return $this->isConnected;
@@ -128,19 +108,22 @@ class ImapClient
     
     /**
      * ImapClient::SetBind()
-     * 
-     * @param mixed $ip
-     * @return
      */
     public function SetBind($ip)
     {
         $this->BindIp = $ip;
     }
-
+    
+    /**
+     * ImapClient::setMailsPagination()
+     */
+    public function setMailsPagination($totalMails){
+        $this->mailsPagination = $totalMails;
+        return $this;
+    }
+    
     /**
      * ImapClient::LogoutAndDisconnect()
-     * 
-     * @return
      */
     public function LogoutAndDisconnect()
     {
@@ -155,8 +138,6 @@ class ImapClient
 
     /**
      * ImapClient::getActiveMailbox()
-     * 
-     * @return
      */
     public function getActiveMailbox()
     {
@@ -165,8 +146,6 @@ class ImapClient
    
     /**
      * ImapClient::getEmailTotal()
-     * 
-     * @return
      */
     public function getEmailTotal()
     {
@@ -175,30 +154,45 @@ class ImapClient
 
     /**
      * ImapClient::getNextUid()
-     * 
-     * @return
      */
     public function getNextUid()
     {
         return $this->next;
     }
-
+    
     /**
-     * ImapClient::MessageList()
-     * 
-     * @param integer $start
-     * @param integer $range
-     * @return
+     * ImapClient::search()
      */
-    public function MessageList($start = 0, $range = 1)
+    public function search(array $filter, $start = 0, $range = 10, $or = false, $body = false)
     {
         if (!$this->isConnected())
             return false;
-        if ($this->mailboxTotal == 0 || $start>$this->mailboxTotal)
+        $search = 'ALL';
+        $response = $this->sendCommand(FetchTypes::UID_SEARCH.' '.$search);
+        if ($this->responseStatus())
+        {
+            $response   = $response[0];
+            $uids       = array_reverse(array_slice($response->ResponseList, 2));
+            $this->mailboxTotal = count($uids);
+            $uids = array_chunk($this->search(),$this->mailsPagination);
+            return array_reverse($this->getEmailResponse(FetchTypes::UID_FETCH, [implode(',',$uids[$offsetPage]), $this->getList([FetchTypes::UID,FetchTypes::FLAGS,FetchTypes::BODYSTRUCTURE,FetchTypes::RFC822_SIZE,FetchTypes::BODY_HEADER_PEEK])]));;
+        }
+        return [];
+    }
+
+    /**
+     * ImapClient::MessageList()
+     */
+    public function MessageList($offsetPage = 0)
+    {
+        $offsetPage = ($offsetPage > 0) ? $offsetPage - 1 : $offsetPage;/** page one equals no page*/
+        if (!$this->isConnected())
+            return false;
+        if ($this->mailboxTotal == 0 || $offsetPage > $this->mailboxTotal)
             return [];
-        $range = $range > 0 ? $range : 1;
-        $start = $start >= 0 ? $start : 0;
-        $max = $this->mailboxTotal - $start;
+        $range      = $this->mailsPagination > 0 ? $this->mailsPagination : 1;
+        $offsetPage = $range * $offsetPage;
+        $max = $this->mailboxTotal - $offsetPage;
         if ($max < 1)
             $max = $this->mailboxTotal;
         $min = $max - $range + 1;
@@ -207,15 +201,12 @@ class ImapClient
         $set = $min . ':' . $max;
         if ($min == $max)
             $set = $min;
-        $emails = array_reverse($this->getEmailResponse(FetchTypes::FETCH, [$set, $this->getList([FetchTypes::UID,FetchTypes::FLAGS,FetchTypes::BODY_HEADER_PEEK,FetchTypes::RFC822_SIZE])]));
+        $emails = array_reverse($this->getEmailResponse(FetchTypes::FETCH, [$set, $this->getList([FetchTypes::UID,FetchTypes::FLAGS,FetchTypes::BODYSTRUCTURE,FetchTypes::RFC822_SIZE,FetchTypes::INTERNALDATE,FetchTypes::BODY_HEADER_PEEK])]));
         return $emails;
     }
 
     /**
      * ImapClient::getEmailsDetails()
-     * 
-     * @param mixed $uid
-     * @return
      */
     public function getEmailsDetails($uid)
     {
@@ -225,14 +216,12 @@ class ImapClient
             return [];
         if (is_array($uid))
             $uid = implode(',', $uid);
-        $response = $this->getEmailResponse(FetchTypes::UID_FETCH,[$uid, $this->getList([FetchTypes::UID,FetchTypes::FLAGS,FetchTypes::BODY,FetchTypes::RFC822_SIZE])]);
+        $response = $this->getEmailResponse(FetchTypes::UID_FETCH,[$uid, $this->getList([FetchTypes::UID,FetchTypes::FLAGS,FetchTypes::BODYSTRUCTURE,FetchTypes::RFC822_SIZE,FetchTypes::INTERNALDATE,FetchTypes::BODY])]);
         return (is_numeric($uid)) ? $response[$uid] : $response;
     }
 
     /**
      * ImapClient::getUids()
-     * 
-     * @return
      */
     public function getUids()
     {
@@ -241,9 +230,6 @@ class ImapClient
 
     /**
      * ImapClient::FolderSelect()
-     * 
-     * @param mixed $mailbox
-     * @return
      */
     public function FolderSelect($mailbox)
     {
@@ -278,8 +264,6 @@ class ImapClient
     
     /**
      * ImapClient::getMailboxes()
-     * 
-     * @return
      */
     public function getMailboxes()
     {
@@ -307,10 +291,6 @@ class ImapClient
     
     /**
      * ImapClient::MessageMove()
-     * 
-     * @param mixed $uid
-     * @param mixed $mailbox
-     * @return
      */
     public function MessageMove($uid, $mailbox)
     {
@@ -320,6 +300,9 @@ class ImapClient
         return $this->MessageRemove($uid);
     }
 	
+    /**
+     * ImapClient::MoveMessages()
+     */
     public function MoveMessages($uids=[], $mailbox)
     {
         if (!$this->isConnected())
@@ -330,10 +313,6 @@ class ImapClient
 	 
     /**
      * ImapClient::MessageCopy()
-     * 
-     * @param mixed $uid
-     * @param mixed $mailbox
-     * @return
      */
     public function MessageCopy($uid,$mailbox)
     {
@@ -342,14 +321,8 @@ class ImapClient
         return $this->sendCommand(FetchTypes::UID_COPY,[$uid,$mailbox]);
     }
     
-    
-    
     /**
      * ImapClient::MessageSetSeen()
-     * 
-     * @param mixed $Uid
-     * @param bool $bSetAction
-     * @return
      */
     public function MessageSetSeen($Uid, $bSetAction = true)
 	{
@@ -369,10 +342,6 @@ class ImapClient
     
 	/**
 	 * ImapClient::MessageStore()
-	 * 
-	 * @param mixed $parameters
-	 * @param bool $IsUid
-	 * @return
 	 */
 	protected function MessageStore($parameters=[], $IsUid = true)
 	{
@@ -383,9 +352,6 @@ class ImapClient
     
     /**
      * ImapClient::MessageRemove()
-     * 
-     * @param mixed $uid
-     * @return
      */
     public function MessageRemove($uid)
     {
@@ -395,8 +361,6 @@ class ImapClient
 
     /**
      * ImapClient::MessageExpunge()
-     * 
-     * @return
      */
     public function MessageExpunge()
     {
@@ -406,39 +370,38 @@ class ImapClient
 
     /**
      * ImapClient::FolderCreate()
-     * 
-     * @param mixed $mailbox
-     * @return
      */
     public function FolderCreate($mailbox)
     {
-        $result = $this->sendCommand(FetchTypes::CREATE, $this->escape($mailbox));
+        $this->sendCommand(FetchTypes::CREATE, $this->escape($mailbox));
     }
     
     /**
      * ImapClient::FolderDelete()
-     * 
-     * @param mixed $mailbox
-     * @return
      */
     public function FolderDelete($mailbox)
     {
-        $result = $this->sendCommand(FetchTypes::DELETE, $this->escape($mailbox));
+        $this->sendCommand(FetchTypes::DELETE, $this->escape($mailbox));
+    }
+    
+    /**
+     * ImapClient::FolderDelete()
+     */
+    public function emptyFolder($mailbox)
+    {
+        $this->FolderDelete($mailbox);
+        $this->FolderCreate($mailbox);
     }
     
     /**
      * ImapClient::getEmailResponse()
-     * 
-     * @param mixed $command
-     * @param mixed $parameters
-     * @return
      */
     private function getEmailResponse($command, $parameters = [])
     {
         $currentEmail = $index = 0;
         $uids         = [];
         $response = $this->sendCommand($command, $parameters);
-        if(!$response)
+        if(!$response || !$this->responseStatus())
             return false;
         foreach($response as $key => $responseLine){
             $line = $responseLine->HumanReadable;
@@ -469,10 +432,12 @@ class ImapClient
                 preg_match("/.*UID\s(\d+).*/", $details['line'], $searchUids);
                 preg_match("/FLAGS \((.*?)\)/", $details['line'], $searchFlags);
                 preg_match("/RFC822.SIZE (.*?) /", $details['line'], $searchSize);
+                preg_match("/INTERNALDATE \"(.*?)\" /", $details['line'], $internalDate);
+                $hasAttachement = (preg_match("/attachment/", $details['line'])) ? true : false;
                 $iUids = filter_var($searchUids[1], FILTER_SANITIZE_NUMBER_INT);
                 $uids[] = $iUids;
                 if($emailRaw){
-                    $emails[$iUids] = Imap\ImapMessage::make($emailRaw)->setFlags($searchFlags[1])->setOptions(['messageFolder' => $this->currentMailbox, 'messageUid' => $iUids, 'messageSize' => filter_var($searchSize[1],FILTER_SANITIZE_NUMBER_INT)])->load();
+                    $emails[$iUids] = Imap\ImapMessage::make($emailRaw)->setInternalDate($internalDate[1])->setAttachements($hasAttachement)->setFlags($searchFlags[1])->setOptions(['messageFolder' => $this->currentMailbox, 'messageUid' => $iUids, 'messageSize' => filter_var($searchSize[1],FILTER_SANITIZE_NUMBER_INT)]);
                 }
             }
         }
@@ -480,18 +445,9 @@ class ImapClient
             return $uids;
         return $emails;
     }
-
-    /**
-     * Imap::getList()
-     * 
-     * @param mixed $array
-     * @return
-     */
+    
     /**
      * ImapClient::getList()
-     * 
-     * @param mixed $array
-     * @return
      */
     private function getList($array)
     {
@@ -500,136 +456,9 @@ class ImapClient
             $list[] = !is_array($value) ? $value : $this->getList($v);
         return '(' . implode(' ', $list) . ')';
     }
-
-    /**
-     * Imap::search()
-     * 
-     * @param mixed $filter
-     * @param integer $start
-     * @param integer $range
-     * @param bool $or
-     * @param bool $body
-     * @return
-     */
-    /**
-     * ImapClient::search()
-     * 
-     * @param mixed $filter
-     * @param integer $start
-     * @param integer $range
-     * @param bool $or
-     * @param bool $body
-     * @return
-     */
-    public function search(array $filter, $start = 0, $range = 10, $or = false, $body = false)
-    {
-        if (!$this->isConnected())
-            return false;
-        $search = $not = [];
-        foreach ($filter as $where)
-        {
-            if (is_string($where))
-            {
-                $search[] = $where;
-                continue;
-            }
-            if ($where[0] == 'NOT')
-            {
-                $not = $where[1];
-                continue;
-            }
-            $item = $where[0] . ' "' . $where[1] . '"';
-            if (isset($where[2]))
-                $item .= ' "' . $where[2] . '"';
-            $search[] = $item;
-        }
-
-        if ($or && count($search) > 1)
-        {
-            $query = null;
-            while ($item = array_pop($search))
-            {
-                $query = (is_null($query)) ? $item : (strpos($query, 'OR') !== 0) ? 'OR (' . $query . ') (' . $item . ')' : 'OR (' . $item . ') (' . $query . ')';
-            }
-            $search = $query;
-        } else
-            $search = implode(' ', $search);
-        $response = $this->sendCommand(FetchTypes::UID_SEARCH.' '.$search);
-        if ($this->responseStatus())
-        {
-            $uids = explode(' ', $response[0]);
-            array_shift($uids);
-            array_shift($uids);
-            foreach ($uids as $i => $uid)
-            {
-                if (in_array($uid, $not))
-                    unset($uids[$i]);
-            }
-            if (empty($uids))
-                return [];
-            $uids = array_reverse($uids);
-            $count = 0;
-            foreach ($uids as $i => $id)
-            {
-                if ($i < $start)
-                {
-                    unset($uids[$i]);
-                    continue;
-                }
-                $count++;
-                if ($range != 0 && $count > $range)
-                {
-                    unset($uids[$i]);
-                    continue;
-                }
-            }
-            return $this->getUniqueEmails($uids, $body);
-        }
-        return [];
-    }
-
-    /**
-     * Imap::searchTotal()
-     * 
-     * @param mixed $filter
-     * @param bool $or
-     * @return
-     */
-    /**
-     * ImapClient::searchTotal()
-     * 
-     * @param mixed $filter
-     * @param bool $or
-     * @return
-     */
-    public function searchTotal(array $filter, $or = false)
-    {
-        if (!$this->isConnected())
-            return false;
-        $search = array();
-        foreach ($filter as $where)
-        {
-            $item = $where[0] . ' "' . $where[1] . '"';
-            if (isset($where[2]))
-                $item .= ' "' . $where[2] . '"';
-            $search[] = $item;
-        }
-        $search   = ($or) ? 'OR (' . implode(') (', $search) . ')' : implode(' ', $search);
-        $response = $this->sendCommand(FetchTypes::UID_SEARCH.' '.$search);
-        if ($this->responseStatus())
-        {
-            $uids = explode(' ', $response[0]);
-            array_shift($uids);
-            array_shift($uids);
-            return count($uids);
-        }
-        return 0;
-    }
     
     /**
      * ImapClient::responseStatus()
-     * 
-     * @return
      */
     protected function responseStatus(){
         return ($this->commandResponse->StatusOrIndex == ResponseStatus::OK) ? true : false;
@@ -637,10 +466,6 @@ class ImapClient
     
     /**
      * ImapClient::sendCommand()
-     * 
-     * @param mixed $command
-     * @param mixed $parameters
-     * @return
      */
     protected function sendCommand($command, $parameters = [])
     {
@@ -651,8 +476,6 @@ class ImapClient
 
     /**
      * ImapClient::makeResponseLine()
-     * 
-     * @return
      */
     protected function makeResponseLine()
     {
@@ -661,8 +484,6 @@ class ImapClient
     
     /**
      * ImapClient::getRawResponseLine()
-     * 
-     * @return
      */
     protected function getRawResponseLine()
     {
@@ -675,8 +496,6 @@ class ImapClient
 
     /**
      * ImapClient::receiveResponse()
-     * 
-     * @return
      */
     protected function receiveResponse()
     {
@@ -697,10 +516,6 @@ class ImapClient
 
     /**
      * ImapClient::putRawCommand()
-     * 
-     * @param mixed $command
-     * @param mixed $parameters
-     * @return
      */
     protected function putRawCommand($command, $parameters = [])
     {
@@ -727,22 +542,16 @@ class ImapClient
 
     /**
      * ImapClient::debug()
-     * 
-     * @param mixed $string
-     * @return
      */
     private function debug($string)
     {
-        if ($this->debugging)
+        if($this->debugging)
             echo $string;
         return $this;
     }
 
     /**
      * ImapClient::escape()
-     * 
-     * @param mixed $string
-     * @return
      */
     private function escape($string)
     {
