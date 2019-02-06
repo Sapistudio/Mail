@@ -389,6 +389,12 @@ class ImapClient
      */
     public function emptyFolder($mailbox)
     {
+        $uids = $this->getUids();
+        if($uids){
+            foreach($uids as $index=>$uidId){
+                $this->MessageRemove($uidId);
+            }
+        }
         $this->FolderDelete($mailbox);
         $this->FolderCreate($mailbox);
     }

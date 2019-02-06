@@ -35,7 +35,7 @@ class ImapMessage
     public static function make($rawContent)
     {
         $rawContent     = trim((is_array($rawContent)) ? implode("\n", $rawContent) : $rawContent);
-	$rawContent     .="\n";
+        $rawContent     .="\n";
         $self           = new self;
         $self->parser   = ImapMessageParser::make($rawContent);
         $self->rawMessageContent = $rawContent;

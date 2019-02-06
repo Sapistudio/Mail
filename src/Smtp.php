@@ -10,186 +10,44 @@ namespace SapiStudio\SapiMail;
 
 class Smtp 
 {
-    /**
-     * @const int TIMEOUT Connection timeout
-     */
-    const TIMEOUT = 30;
-
-    /**
-     * @var string $host The SMTP Host
-     */
-    protected $host = null;
-       
-    /**
-     * @var string|null $port The SMTP port
-     */
-    protected $port = null;
-       
-    /**
-     * @var bool $ssl Whether to use SSL
-     */
-    protected $ssl = false;
-       
-    /**
-     * @var bool $tls Whether to use TLS
-     */
-    protected $tls = false;
-       
-    /**
-     * @var string|null $username The mailbox user name
-     */
-    protected $username = null;
-       
-    /**
-     * @var string|null $password The mailbox password
-     */
-    protected $password = null;
-       
-    /**
-     * @var [RESOURCE] $socket The socket connection
-     */
-    protected $socket = null;
-       
-    /**
-     * @var array $boundary The list of boundaries
-     */
-    protected $boundary = [];
-       
-    /**
-     * @var array $subject The mail subject
-     */
-    protected $subject  = null;
-       
-    /**
-     * @var array $body Body content types
-     */
-    protected $body = [];
-       
-    /**
-     * @var array $to The list of main recipients
-     */
-    protected $to = [];
-       
-    /**
-     * @var array $cc The list of carbon copies
-     */
-    protected $cc = [];
-       
-    /**
-     * @var array $bcc The list of BCCs sorry i forgot what this stood for :(
-     */
-    protected $bcc = [];
-       
-    /**
-     * @var array $attachments The list of attachments
-     */
-    protected $attachments = [];
-
-    /**
-     * @var bool $debugging If true outputs the logs
-     */
-    private $debugging = true;
+    const TIMEOUT           = 5;
+    protected $host         = null;
+    protected $port         = null;
+    protected $ssl          = false;
+    protected $tls          = false;
+    protected $username     = null;
+    protected $password     = null;
+    protected $socket       = null;
+    protected $boundary     = [];
+    protected $subject      = null;
+    protected $body         = [];
+    protected $to           = [];
+    protected $cc           = [];
+    protected $bcc          = [];
+    protected $attachments  = [];
+    protected $ehloName     = 'local.host';
+    private $transcript     = [];
     
-    /**
-     * Smtp::make()
-     * 
-     * @param mixed $host
-     * @param mixed $user
-     * @param mixed $pass
-     * @param mixed $port
-     * @param bool $ssl
-     * @param bool $tls
-     * @return
-     */
-    public static function make($host = null, $user = null, $pass = null, $port = null, $ssl = true, $tls = false){
+    public static function make($host = null,$port = null, $user = null, $pass = null){
         return new static($host,$user,$pass,$port,$ssl,$tls);
     }
     
-    /**
-     * Smtp::__construct()
-     * 
-     * @param mixed $host
-     * @param mixed $user
-     * @param mixed $pass
-     * @param mixed $port
-     * @param bool $ssl
-     * @param bool $tls
-     * @return
-     */
-    public function __construct($host = null, $user = null, $pass = null, $port = null, $ssl = true, $tls = false) {
+    public function __construct($host, $user, $pass, $port) {
         if (is_null($port))
             $port = $ssl ? 465 : 25;
         $this->host         = $host;
         $this->username     = $user;
         $this->password     = $pass;
         $this->port         = $port;
-        $this->ssl          = $ssl;
-        $this->tls          = $tls;
         $this->boundary[]   = md5(time().'1');
         $this->boundary[]   = md5(time().'2');
     }
-
-    /**
-     * Smtp::addAttachment()
-     * 
-     * @param mixed $filename
-     * @param mixed $data
-     * @param mixed $mime
-     * @return
-     */
-    public function addAttachment($filename, $data, $mime = null)
-    {
-        $this->attachments[] = array($filename, $data, $mime);
-        return $this;
+    
+    public function __destruct(){
+        $this->disconnect();
     }
-
-    /**
-     * Smtp::addBCC()
-     * 
-     * @param mixed $email
-     * @param mixed $name
-     * @return
-     */
-    public function addBCC($email, $name = null)
-    {
-        $this->bcc[$email] = $name;
-        return $this;
-    }
-
-    /**
-     * Smtp::addCC()
-     * 
-     * @param mixed $email
-     * @param mixed $name
-     * @return
-     */
-    public function addCC($email, $name = null)
-    {
-        $this->cc[$email] = $name;
-        return $this;
-    }
-
-    /**
-     * Smtp::addTo()
-     * 
-     * @param mixed $email
-     * @param mixed $name
-     * @return
-     */
-    public function addTo($email, $name = null)
-    {
-        $this->to[$email] = $name;
-        return $this;
-    }
-
-    /**
-     * Smtp::connect()
-     * 
-     * @param mixed $timeout
-     * @param bool $test
-     * @return
-     */
-    public function connect($timeout = self::TIMEOUT, $test = false)
+    
+    public function connect($timeout = self::TIMEOUT)
     {
         $host   = $this->host;
         $host   = ($this->ssl) ? 'ssl://' . $host : 'tcp://' . $host;
@@ -198,49 +56,25 @@ class Smtp
         $this->socket = @stream_socket_client($host.':'.$this->port, $errno, $errstr, $timeout);
         if (!$this->socket || strlen($errstr) > 0 || $errno > 0)
             throw new Exception(Exception::SERVER_ERROR);
-        $this->receive();
-        if (!$this->call('EHLO '.$_SERVER['HTTP_HOST'], 250) && !$this->call('HELO '.$_SERVER['HTTP_HOST'], 250)) {
-            $this->disconnect();
+        if (!$this->call('EHLO '.$this->getEhlo(), 220, 250) && !$this->call('HELO '.$this->getEhlo(), 220, 250))
             throw new Exception(Exception::SERVER_ERROR);
-        }
-
         if ($this->tls && !$this->call('STARTTLS', 220, 250)) {
-            if (!stream_socket_enable_crypto($this->socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-                $this->disconnect();
+            if (!stream_socket_enable_crypto($this->socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT))
                 throw new Exception(Exception::TLS_ERROR);
-            }
-            if (!$this->call('EHLO '.$_SERVER['HTTP_HOST'], 250) && !$this->call('HELO '.$_SERVER['HTTP_HOST'], 250)) {
-                $this->disconnect();
+            if (!$this->call('EHLO '.$this->getEhlo(), 220, 250) && !$this->call('HELO '.$this->getEhlo(), 220, 250))
                 throw new Exception(Exception::SERVER_ERROR);
-            }
         }
-        if ($test) {
-            $this->disconnect();
-            return $this;
+        if($this->username){
+            if (!$this->call('AUTH LOGIN', 250, 334))
+                throw new Exception(Exception::LOGIN_ERROR);
+            if (!$this->call(base64_encode($this->username), 334)) 
+                throw new Exception(Exception::LOGIN_ERROR);
+            if (!$this->call(base64_encode($this->password), 235, 334))
+                throw new Exception(Exception::LOGIN_ERROR);
         }
-
-        if (!$this->call('AUTH LOGIN', 250, 334)) {
-            $this->disconnect();
-            throw new Exception(Exception::LOGIN_ERROR);
-        }
-        if (!$this->call(base64_encode($this->username), 334)) {
-            $this->disconnect();
-            throw new Exception(Exception::LOGIN_ERROR);
-        }
-
-        if (!$this->call(base64_encode($this->password), 235, 334)) {
-            $this->disconnect();
-            throw new Exception(Exception::LOGIN_ERROR);
-        }
-
         return $this;
     }
 
-    /**
-     * Smtp::disconnect()
-     * 
-     * @return
-     */
     public function disconnect()
     {
         if ($this->socket) {
@@ -250,97 +84,137 @@ class Smtp
         }
         return $this;
     }
+    
+    public function isSsl(){
+        $this->ssl = true;
+        return $this;
+    }
+    
+    public function isTsl(){
+        $this->tls = true;
+        return $this;
+    }
+    
+    public function setEhlo($ehlo){
+        $this->ehloName = $ehlo;
+        return $this;
+    }
+    
+    public function getEhlo(){
+        return $this->ehloName;
+    }
 
-    /**
-     * Smtp::reply()
-     * 
-     * @param mixed $messageId
-     * @param mixed $topic
-     * @param mixed $headers
-     * @return
-     */
-    public function reply($messageId, $topic = null, array $headers = array())
+    public function addAttachment($filename, $data, $mime = null)
+    {
+        $this->attachments[] = [$filename, $data, $mime];
+        return $this;
+    }
+
+    public function addBCC($email, $name = null)
+    {
+        $this->bcc[$email] = $name;
+        return $this;
+    }
+
+    public function addCC($email, $name = null)
+    {
+        $this->cc[$email] = $name;
+        return $this;
+    }
+
+    public function addTo($email, $name = null)
+    {
+        $this->to[$email] = $name;
+        return $this;
+    }
+
+    protected function call($command, $code = null)
+    {
+        if (!$this->push($command))
+            return false;
+        $receive = $this->receive();
+        $args = func_get_args();
+        if (count($args) > 1) {
+            for ($i = 1; $i < count($args); $i++) {
+                if (strpos($receive, (string)$args[$i]) === 0)
+                    return true;
+            }
+            return false;
+        }
+        return $receive;
+    }
+    
+    protected function receive()
+    {
+        $data = '';
+        $now = time();
+        while($str = fgets($this->socket, 1024)) {
+            $data .= $str;
+            if (substr($str, 3, 1) == ' ' || time() > ($now + self::TIMEOUT)) {
+                break;
+            }
+        }
+        $this->transcript($data);
+        return $data;
+    }
+
+    protected function push($command)
+    {
+        $this->transcript($command);
+        return fwrite($this->socket, $command . "\r\n");
+    }
+
+    private function transcript($string)
+    {
+        $this->transcript = array_merge($this->transcript,array_filter(explode("\n",$string))); 
+        return $this;
+    }
+    
+    public function reply($messageId, array $headers = array())
     {
         if (!$this->socket)
             $this->connect();
-        //add from
-        if (!$this->call('MAIL FROM:<' . $this->username . '>', 250, 251)) {
-            $this->disconnect();
+        if (!$this->call('MAIL FROM:<' . $this->username . '>', 250, 251))
             throw new Exception(Exception::SMTP_ADD_EMAIL);
-        }
-
-        //add to
         foreach ($this->to as $email => $name) {
-            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251)) {
-                $this->disconnect();
+            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251))
                 throw new Exception(Exception::SMTP_ADD_EMAIL);
-            }
         }
-
-        //add cc
         foreach ($this->cc as $email => $name) {
-            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251)) {
-                $this->disconnect();
+            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251))
                 throw new Exception(Exception::SMTP_ADD_EMAIL);
-            }
         }
-
-        //add bcc
         foreach ($this->bcc as $email => $name) {
-            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251)) {
-                $this->disconnect();
+            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251))
                 throw new Exception(Exception::SMTP_ADD_EMAIL);
-            }
         }
 
-        //start compose
-        if (!$this->call('DATA', 354)) {
-            $this->disconnect();
+        if (!$this->call('DATA', 354))
             throw new Exception(Exception::SMTP_DATA);
-        }
-
         $headers    = $this->getHeaders($headers);
         $body       = $this->getBody();
-
         $headers['In-Reply-To'] = $messageId;
-
-        if ($topic) {
-            $headers['Thread-Topic'] = $topic;
-        }
-
         //send header data
         foreach ($headers as $name => $value) {
-            var_dump($name.': '.$value);
             $this->push($name.': '.$value);
         }
-
         //send body data
         foreach ($body as $line) {
             if (strpos($line, '.') === 0) {
                 // Escape lines prefixed with a '.'
                 $line = '.' . $line;
             }
-
             $this->push($line);
         }
 
         //tell server this is the end
-        if (!$this->call("\r\n.\r\n", 250)) {
-            $this->disconnect();
+        if (!$this->call("\r\n.\r\n", 250))
             throw new Exception(Exception::SMTP_DATA);
-        }
-
         //reset (some reason without this, this class spazzes out)
         $this->push('RSET');
-
         return $headers;
     }
 
-    /**
-     * Smtp::reset()
-     * 
-     * @return
-     */
     public function reset()
     {
         $this->subject      = null;
@@ -353,12 +227,6 @@ class Smtp
         return $this;
     }
 
-    /**
-     * Smtp::send()
-     * 
-     * @param mixed $headers
-     * @return
-     */
     public function send(array $headers = array())
     {
         //if no socket
@@ -368,40 +236,30 @@ class Smtp
         $body       = $this->getBody();
 
         //add from
-        if (!$this->call('MAIL FROM:<' . $this->username . '>', 250, 251)) {
-            $this->disconnect();
+        if (!$this->call('MAIL FROM:<' . $this->username . '>', 250, 251))
             throw new Exception(Exception::SMTP_ADD_EMAIL);
-        }
 
         //add to
         foreach ($this->to as $email => $name) {
-            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251)) {
-                $this->disconnect();
+            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251))
                 throw new Exception(Exception::SMTP_ADD_EMAIL);
-            }
         }
 
         //add cc
         foreach ($this->cc as $email => $name) {
-            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251)) {
-                $this->disconnect();
+            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251))
                 throw new Exception(Exception::SMTP_ADD_EMAIL);
-            }
         }
 
         //add bcc
         foreach ($this->bcc as $email => $name) {
-            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251)) {
-                $this->disconnect();
+            if (!$this->call('RCPT TO:<' . $email . '>', 250, 251))
                 throw new Exception(Exception::SMTP_ADD_EMAIL);
-            }
         }
 
         //start compose
-        if (!$this->call('DATA', 354)) {
-            $this->disconnect();
+        if (!$this->call('DATA', 354))
             throw new Exception(Exception::SMTP_DATA);
-        }
 
         //send header data
         foreach ($headers as $name => $value) {
@@ -416,21 +274,12 @@ class Smtp
         }
 
         //tell server this is the end
-        if (!$this->call(".", 250)) {
-            $this->disconnect();
+        if (!$this->call(".", 250))
             throw new Exception(Exception::SMTP_DATA);
-        }
         $this->push('RSET');
         return $headers;
     }
 
-    /**
-     * Smtp::setBody()
-     * 
-     * @param mixed $body
-     * @param bool $html
-     * @return
-     */
     public function setBody($body, $html = false)
     {
         if ($html) {
@@ -441,24 +290,12 @@ class Smtp
         return $this;
     }
 
-    /**
-     * Smtp::setSubject()
-     * 
-     * @param mixed $subject
-     * @return
-     */
     public function setSubject($subject)
     {
         $this->subject = $subject;
         return $this;
     }
 
-    /**
-     * Smtp::addAttachmentBody()
-     * 
-     * @param mixed $body
-     * @return
-     */
     protected function addAttachmentBody(array $body)
     {
         foreach ($this->attachments as $attachment) {
@@ -477,39 +314,10 @@ class Smtp
             $body[] = null;
             $body[] = null;
         }
-
         $body[] = '--'.$this->boundary[1].'--';
         return $body;
     }
 
-    /**
-     * Smtp::call()
-     * 
-     * @param mixed $command
-     * @param mixed $code
-     * @return
-     */
-    protected function call($command, $code = null)
-    {
-        if (!$this->push($command))
-            return false;
-        $receive = $this->receive();
-        $args = func_get_args();
-        if (count($args) > 1) {
-            for ($i = 1; $i < count($args); $i++) {
-                if (strpos($receive, (string)$args[$i]) === 0)
-                    return true;
-            }
-            return false;
-        }
-        return $receive;
-    }
-
-    /**
-     * Smtp::getAlternativeAttachmentBody()
-     * 
-     * @return
-     */
     protected function getAlternativeAttachmentBody()
     {
         $alternative    = $this->getAlternativeBody();
@@ -522,16 +330,10 @@ class Smtp
         return $this->addAttachmentBody($body);
     }
 
-    /**
-     * Smtp::getAlternativeBody()
-     * 
-     * @return
-     */
     protected function getAlternativeBody()
     {
         $plain  = $this->getPlainBody();
         $html   = $this->getHtmlBody();
-
         $body   = [];
         $body[] = 'Content-Type: multipart/alternative; boundary="'.$this->boundary[0].'"';
         $body[] = null;
@@ -547,11 +349,6 @@ class Smtp
         return $body;
     }
 
-    /**
-     * Smtp::getBody()
-     * 
-     * @return
-     */
     protected function getBody()
     {
         $type = 'Plain';
@@ -569,12 +366,6 @@ class Smtp
         return $this->$method();
     }
 
-    /**
-     * Smtp::getHeaders()
-     * 
-     * @param mixed $customHeaders
-     * @return
-     */
     protected function getHeaders(array $customHeaders = [])
     {
         $timestamp  = $this->getTimestamp();
@@ -601,11 +392,6 @@ class Smtp
         return $headers;
     }
 
-    /**
-     * Smtp::getHtmlAttachmentBody()
-     * 
-     * @return
-     */
     protected function getHtmlAttachmentBody()
     {
         $html   = $this->getHtmlBody();
@@ -618,11 +404,6 @@ class Smtp
         return $this->addAttachmentBody($body);
     }
 
-    /**
-     * Smtp::getHtmlBody()
-     * 
-     * @return
-     */
     protected function getHtmlBody()
     {
         $charset    = $this->isUtf8($this->body['text/html']) ? 'utf-8' : 'US-ASCII';
@@ -638,11 +419,6 @@ class Smtp
         return $body;
     }
 
-    /**
-     * Smtp::getPlainAttachmentBody()
-     * 
-     * @return
-     */
     protected function getPlainAttachmentBody()
     {
         $plain  = $this->getPlainBody();
@@ -655,11 +431,6 @@ class Smtp
         return $this->addAttachmentBody($body);
     }
 
-    /**
-     * Smtp::getPlainBody()
-     * 
-     * @return
-     */
     protected function getPlainBody()
     {
         $charset    = $this->isUtf8($this->body['text/plain']) ? 'utf-8' : 'US-ASCII';
@@ -676,57 +447,6 @@ class Smtp
         return $body;
     }
 
-    /**
-     * Smtp::receive()
-     * 
-     * @return
-     */
-    protected function receive()
-    {
-        $data = '';
-        $now = time();
-        while ($str = fgets($this->socket, 1024)) {
-            $data .= $str;
-            if (substr($str, 3, 1) == ' ' || time() > ($now + self::TIMEOUT)) {
-                break;
-            }
-        }
-        $this->debug('Receiving: '. $data);
-        return $data;
-    }
-
-    /**
-     * Smtp::push()
-     * 
-     * @param mixed $command
-     * @return
-     */
-    protected function push($command)
-    {
-        $this->debug('Sending: '.$command);
-        return fwrite($this->socket, $command . "\r\n");
-    }
-
-    /**
-     * Smtp::debug()
-     * 
-     * @param mixed $string
-     * @return
-     */
-    private function debug($string)
-    {
-        if ($this->debugging) {
-            $string = htmlspecialchars($string);
-            echo '<pre>'.$string.'</pre>'."\n";
-        }
-        return $this;
-    }
-
-    /**
-     * Smtp::getTimestamp()
-     * 
-     * @return
-     */
     private function getTimestamp()
     {
         $zone = date('Z');
@@ -736,12 +456,6 @@ class Smtp
         return sprintf("%s %s%04d", date('D, j M Y H:i:s'), $sign, $zone);
     }
 
-    /**
-     * Smtp::isUtf8()
-     * 
-     * @param mixed $string
-     * @return
-     */
     private function isUtf8($string)
     {
         $regex = ['[\xC2-\xDF][\x80-\xBF]','\xE0[\xA0-\xBF][\x80-\xBF]','[\xE1-\xEC\xEE\xEF][\x80-\xBF]{2}','\xED[\x80-\x9F][\x80-\xBF]','\xF0[\x90-\xBF][\x80-\xBF]{2}','[\xF1-\xF3][\x80-\xBF]{3}','\xF4[\x80-\x8F][\x80-\xBF]{2}'];
@@ -753,13 +467,6 @@ class Smtp
         return true;
     }
 
-    /**
-     * Smtp::quotedPrintableEncode()
-     * 
-     * @param mixed $input
-     * @param integer $line_max
-     * @return
-     */
     private function quotedPrintableEncode($input, $line_max = 250)
     {
         $hex        = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'];
