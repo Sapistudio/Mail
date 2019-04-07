@@ -186,7 +186,18 @@ class Message
         
         return $this;
     }
-
+    
+    /**
+     * Message::replaceHeaders()
+     */
+    
+    public function replaceHeaders($newHeaders){
+        foreach ($newHeaders as $headerName => $headerValue){
+            $this->removeHeader($headerName);
+            $this->swift->getHeaders()->addTextHeader($headerName, $headerValue);
+        }
+    }
+    
     /**
      * Message::createAttachmentFromPath()
      * 
