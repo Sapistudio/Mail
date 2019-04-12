@@ -192,6 +192,9 @@ class Message
      */
     
     public function replaceHeaders($newHeaders){
+        foreach($this->swift->getHeaders()->getAll() as $index=>$header){
+            $this->removeHeader($header->getFieldName());
+        }
         foreach ($newHeaders as $headerName => $headerValue){
             $this->removeHeader($headerName);
             $this->swift->getHeaders()->addTextHeader($headerName, $headerValue);
