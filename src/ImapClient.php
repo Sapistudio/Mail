@@ -18,7 +18,7 @@ class ImapClient
     protected $password         = null;
     protected $currentTag       = 0;
     protected $mailboxTotal     = 0;
-    protected $next             = 0;
+    protected $nextUid          = 0;
     protected $bufferResponse   = null;
     protected $commandResponse  = null;
     protected $socket           = null;
@@ -29,23 +29,17 @@ class ImapClient
     private $rawCommands        = [];
     protected $mailsPagination  = 25;
     
-    /**
-     * ImapClient::make()
-     */
+    /** ImapClient::make()*/
     public static function make(){
         return new self;
     }
     
-    /**
-     * ImapClient::testConnection()
-     */
+    /** ImapClient::testConnection()  */
     public static function testConnection($host=null,$port = null, $ssl = true, $tls = false){
         return self::make()->initConnection($host,$port, $ssl, $tls)->LogoutAndDisconnect();
     }
     
-    /**
-     * ImapClient::initConnection()
-     */
+    /** ImapClient::initConnection() */
     public function initConnection($host=null,$port = null, $ssl = true, $tls = false)
     {
         if (is_null($port))
@@ -64,11 +58,11 @@ class ImapClient
             $context = ['socket' => ['bindto' => $this->BindIp . ':0']];
         $this->socket = stream_socket_client($host . ':' . $this->port . '', $errno, $errstr, self::TIMEOUT, STREAM_CLIENT_CONNECT, $context);
         if (!$this->socket)
-            throw new Exception(exception::SERVER_ERROR);           
+            throw new Exception(sprintf(exception::SERVER_ERROR, $host));
         if ($this->makeResponseLine()->StatusOrIndex != ResponseStatus::OK)
         {
             $this->LogoutAndDisconnect();
-            throw new Exception(exception::SERVER_ERROR);
+            throw new Exception(sprintf(exception::SERVER_ERROR, $host));
         }
         if ($this->tls)
         {
@@ -83,9 +77,7 @@ class ImapClient
         return $this;
     }
     
-    /**
-     * ImapClient::loginToMailbox()
-     */
+    /** ImapClient::loginToMailbox()*/
     public function loginToMailbox($user,$password)
     {
         if (!$this->isConnected())
@@ -99,32 +91,24 @@ class ImapClient
         return $this;
     }
     
-    /**
-     * ImapClient::isConnected()
-     */
+    /** ImapClient::isConnected() */
     public function isConnected(){
         return $this->isConnected;
     }
     
-    /**
-     * ImapClient::SetBind()
-     */
+    /** ImapClient::SetBind()  */
     public function SetBind($ip)
     {
         $this->BindIp = $ip;
     }
     
-    /**
-     * ImapClient::setMailsPagination()
-     */
+    /** ImapClient::setMailsPagination() */
     public function setMailsPagination($totalMails){
         $this->mailsPagination = $totalMails;
         return $this;
     }
     
-    /**
-     * ImapClient::LogoutAndDisconnect()
-     */
+    /** ImapClient::LogoutAndDisconnect()*/
     public function LogoutAndDisconnect()
     {
         if ($this->socket)
@@ -136,33 +120,25 @@ class ImapClient
         return $this;
     }
 
-    /**
-     * ImapClient::getActiveMailbox()
-     */
+    /** ImapClient::getActiveMailbox() */
     public function getActiveMailbox()
     {
         return $this->currentMailbox;
     }
    
-    /**
-     * ImapClient::getEmailTotal()
-     */
+    /** ImapClient::getEmailTotal() */
     public function getEmailTotal()
     {
         return $this->mailboxTotal;
     }
 
-    /**
-     * ImapClient::getNextUid()
-     */
+    /** ImapClient::getNextUid()*/
     public function getNextUid()
     {
-        return $this->next;
+        return $this->nextUid;
     }
     
-    /**
-     * ImapClient::search()
-     */
+    /** ImapClient::search()  */
     public function search(array $filter, $start = 0, $range = 10, $or = false, $body = false)
     {
         if (!$this->isConnected())
@@ -180,9 +156,7 @@ class ImapClient
         return [];
     }
 
-    /**
-     * ImapClient::MessageList()
-     */
+    /** ImapClient::MessageList()*/
     public function MessageList($offsetPage = 0)
     {
         $offsetPage = ($offsetPage > 0) ? $offsetPage - 1 : $offsetPage;/** page one equals no page*/
@@ -205,9 +179,7 @@ class ImapClient
         return $emails;
     }
 
-    /**
-     * ImapClient::getEmailsDetails()
-     */
+    /** ImapClient::getEmailsDetails() */
     public function getEmailsDetails($uid)
     {
         if (!$this->isConnected())
@@ -220,17 +192,13 @@ class ImapClient
         return (is_numeric($uid)) ? $response[$uid] : $response;
     }
 
-    /**
-     * ImapClient::getUids()
-     */
+    /** ImapClient::getUids() */
     public function getUids()
     {
         return $this->getEmailResponse(FetchTypes::FETCH,[1 . ':' . $this->mailboxTotal, $this->getList([FetchTypes::UID])]);
     }
 
-    /**
-     * ImapClient::FolderSelect()
-     */
+    /** ImapClient::FolderSelect() */
     public function FolderSelect($mailbox)
     {
         if (!$this->isConnected() || !$mailbox)
@@ -245,14 +213,14 @@ class ImapClient
                 continue;
             }
             if (strpos($line->HumanReadable,FetchResponse::UIDNEXT) !== false){
-                $this->next = filter_var($line->ResponseList[3], FILTER_SANITIZE_NUMBER_INT);
+                $this->nextUid = filter_var($line->ResponseList[3], FILTER_SANITIZE_NUMBER_INT);
                 continue;
             }
             if (strpos($line->HumanReadable,FetchResponse::RECENT) !== false){
                 $this->unseenMails = filter_var($line->ResponseList[1], FILTER_SANITIZE_NUMBER_INT);
                 continue;
             }
-            if ($this->mailboxTotal && $this->next && $this->unseenMails)
+            if ($this->mailboxTotal && $this->nextUid && $this->unseenMails)
                 break;
         }
         $this->currentMailbox = $mailbox;
@@ -262,9 +230,7 @@ class ImapClient
         return $this;
     }
     
-    /**
-     * ImapClient::getMailboxes()
-     */
+    /** ImapClient::getMailboxes() */
     public function getMailboxes()
     {
         if (!$this->isConnected())
@@ -289,9 +255,7 @@ class ImapClient
         return $mailboxes;
     }
     
-    /**
-     * ImapClient::MessageMove()
-     */
+    /** ImapClient::MessageMove()*/
     public function MessageMove($uid, $mailbox)
     {
         if (!$this->isConnected())
@@ -300,9 +264,7 @@ class ImapClient
         return $this->MessageRemove($uid);
     }
 	
-    /**
-     * ImapClient::MoveMessages()
-     */
+    /** ImapClient::MoveMessages()*/
     public function MoveMessages($uids=[], $mailbox)
     {
         if (!$this->isConnected())
@@ -311,9 +273,7 @@ class ImapClient
         //return $this->MessageRemove($uid);
     }
 	 
-    /**
-     * ImapClient::MessageCopy()
-     */
+    /** ImapClient::MessageCopy()*/
     public function MessageCopy($uid,$mailbox)
     {
         if (!$this->isConnected())
@@ -321,28 +281,19 @@ class ImapClient
         return $this->sendCommand(FetchTypes::UID_COPY,[$uid,$mailbox]);
     }
     
-    /**
-     * ImapClient::MessageSetSeen()
-     */
+    /** ImapClient::MessageSetSeen()*/
     public function MessageSetSeen($Uid, $bSetAction = true)
 	{
         $this->MessageStore([$Uid,$bSetAction ? FetchTypes::ADD_FLAGS_SILENT : FetchTypes::REMOVE_FLAGS_SILENT,$this->getList([MessageFlag::SEEN])],is_numeric($Uid) ? true : false);
 	}
     
-    /**
-     * ImapClient::MessageSetSeenAll()
-     * 
-     * @param bool $bSetAction
-     * @return
-     */
+    /** ImapClient::MessageSetSeenAll()*/
     public function MessageSetSeenAll($bSetAction = true)
 	{
         $this->MessageStore(['1:*',$bSetAction ? FetchTypes::ADD_FLAGS_SILENT : FetchTypes::REMOVE_FLAGS_SILENT,$this->getList([MessageFlag::SEEN])],false);
 	}
     
-	/**
-	 * ImapClient::MessageStore()
-	 */
+	/** ImapClient::MessageStore() */
 	protected function MessageStore($parameters=[], $IsUid = true)
 	{
 	   if (!$this->isConnected())
@@ -350,43 +301,33 @@ class ImapClient
 		return $this->sendCommand(($IsUid) ? FetchTypes::UID_STORE : FetchTypes::STORE,$parameters);
 	}
     
-    /**
-     * ImapClient::MessageRemove()
-     */
+    /** ImapClient::MessageRemove()*/
     public function MessageRemove($uid)
     {
         $this->MessageStore([$uid, FetchTypes::ADD_FLAGS_SILENT ,$this->getList([MessageFlag::DELETED])]);
         return $this->MessageExpunge();
     }
 
-    /**
-     * ImapClient::MessageExpunge()
-     */
+    /** ImapClient::MessageExpunge()*/
     public function MessageExpunge()
     {
         $this->sendCommand(FetchTypes::EXPUNGE);
         return $this;
     }
 
-    /**
-     * ImapClient::FolderCreate()
-     */
+    /** ImapClient::FolderCreate() */
     public function FolderCreate($mailbox)
     {
         $this->sendCommand(FetchTypes::CREATE, $this->escape($mailbox));
     }
     
-    /**
-     * ImapClient::FolderDelete()
-     */
+    /**  ImapClient::FolderDelete() */
     public function FolderDelete($mailbox)
     {
         $this->sendCommand(FetchTypes::DELETE, $this->escape($mailbox));
     }
     
-    /**
-     * ImapClient::FolderDelete()
-     */
+    /** ImapClient::FolderDelete() */
     public function emptyFolder($mailbox)
     {
         $uids = $this->getUids();
@@ -399,9 +340,7 @@ class ImapClient
         $this->FolderCreate($mailbox);
     }
     
-    /**
-     * ImapClient::getEmailResponse()
-     */
+    /** ImapClient::getEmailResponse()*/
     private function getEmailResponse($command, $parameters = [])
     {
         $currentEmail = $index = 0;
@@ -452,9 +391,7 @@ class ImapClient
         return $emails;
     }
     
-    /**
-     * ImapClient::getList()
-     */
+    /** ImapClient::getList() */
     private function getList($array)
     {
         $list = [];
@@ -463,16 +400,12 @@ class ImapClient
         return '(' . implode(' ', $list) . ')';
     }
     
-    /**
-     * ImapClient::responseStatus()
-     */
+    /** ImapClient::responseStatus() */
     protected function responseStatus(){
         return ($this->commandResponse->StatusOrIndex == ResponseStatus::OK) ? true : false;
     }
     
-    /**
-     * ImapClient::sendCommand()
-     */
+    /** ImapClient::sendCommand()*/
     protected function sendCommand($command, $parameters = [])
     {
         if (!$this->putRawCommand($command, $parameters))
@@ -480,17 +413,13 @@ class ImapClient
         return $this->receiveResponse();
     }
 
-    /**
-     * ImapClient::makeResponseLine()
-     */
+    /** ImapClient::makeResponseLine() */
     protected function makeResponseLine()
     {
         return Imap\ImapResponse::make(trim($this->getRawResponseLine(),"\n"));
     }
     
-    /**
-     * ImapClient::getRawResponseLine()
-     */
+    /** ImapClient::getRawResponseLine()*/
     protected function getRawResponseLine()
     {
         $line = fgets($this->socket);
@@ -500,9 +429,7 @@ class ImapClient
         return $line;
     }
 
-    /**
-     * ImapClient::receiveResponse()
-     */
+    /** ImapClient::receiveResponse()*/
     protected function receiveResponse()
     {
         $this->bufferResponse = [];
@@ -520,9 +447,7 @@ class ImapClient
         return null;
     }
 
-    /**
-     * ImapClient::putRawCommand()
-     */
+    /** ImapClient::putRawCommand()*/
     protected function putRawCommand($command, $parameters = [])
     {
         $this->currentTag++;
@@ -546,9 +471,7 @@ class ImapClient
         return fputs($this->socket, $line . "\r\n");
     }
 
-    /**
-     * ImapClient::debug()
-     */
+    /** ImapClient::debug()*/
     private function debug($string)
     {
         if($this->debugging)
@@ -556,9 +479,7 @@ class ImapClient
         return $this;
     }
 
-    /**
-     * ImapClient::escape()
-     */
+    /** ImapClient::escape()*/
     private function escape($string)
     {
         if (func_num_args() < 2)
