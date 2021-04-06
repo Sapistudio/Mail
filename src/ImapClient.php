@@ -53,9 +53,10 @@ class ImapClient
         $host = $this->host;
         if ($this->ssl)
             $host = 'ssl://' . $host;
-        $context = stream_context_create(['ssl' => ['verify_peer' => false,'verify_peer_name' => false, 'allow_self_signed' => true]]);
+        $contextOpts = ['ssl' => ['verify_peer' => false,'verify_peer_name' => false, 'allow_self_signed' => true]];
         if ($this->BindIp != '')
-            $context = ['socket' => ['bindto' => $this->BindIp . ':0']];
+            $contextOpts['socket'] = ['bindto' => $this->BindIp . ':0'];
+        $context        = stream_context_create($contextOpts);
         $this->socket = stream_socket_client($host . ':' . $this->port . '', $errno, $errstr, self::TIMEOUT, STREAM_CLIENT_CONNECT, $context);
         if (!$this->socket)
             throw new Exception(sprintf(exception::SERVER_ERROR, $host));
